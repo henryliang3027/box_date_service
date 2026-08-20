@@ -48,7 +48,6 @@ box_date_service/
 GEMINI_API_KEY=your-api-key
 ```
 
-`config.py` 啟動時會自動用 `python-dotenv` 讀取此檔案，不需手動 `export`。
 
 ### 2. 安裝依賴
 
