@@ -42,14 +42,18 @@ box_date_service/
 
 ### 1. 設定 Gemini API Key
 
-```bash
-export GEMINI_API_KEY="your-api-key"
+在專案根目錄建立 `.env` 檔案，內容如下（將 `your-api-key` 換成你自己的 Gemini API Key）：
+
 ```
+GEMINI_API_KEY=your-api-key
+```
+
+`config.py` 啟動時會自動用 `python-dotenv` 讀取此檔案，不需手動 `export`。
 
 ### 2. 安裝依賴
 
 ```bash
-pip install fastapi uvicorn opencv-python-headless numpy pillow ultralytics google-genai python-multipart
+pip install fastapi uvicorn opencv-python-headless numpy pillow ultralytics google-genai python-multipart python-dotenv
 ```
 
 ### 3. 確認 YOLO 模型存在
