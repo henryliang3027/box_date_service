@@ -14,7 +14,9 @@ API route 只需呼叫 pipeline.run()，不需知道各服務的細節。
     → (3) 對每筆 Gemini 結果，計算 box_2d 中心點；
            若中心點落在某個 YOLO mask 內 → 保留該 mask + Gemini 資訊
            若中心點沒有落在任何 mask 內 → 捨棄
-    → (4) 組合回應（含選用的標注圖片）
+    → (4) 將 Gemini 的 product_name 與 box_name.json 資料庫做模糊比對，
+           取得正確的 brand / name（比對不到則 brand=None，name 沿用原始文字）
+    → (5) 組合回應（含選用的標注圖片）
 """
 
 import base64                   # 將標注圖片編碼為 base64 字串
@@ -30,6 +32,7 @@ from service_api.schemas import (   # Pydantic 回應格式
     ProductInfo,
 )
 from service_api import config
+from service_api.services.box_matcher    import match_product    # 品名資料庫模糊比對
 from service_api.services.detector       import BoxDetector      # YOLO 偵測器
 from service_api.services.gemini_client  import GeminiBoxClient  # Gemini 整圖辨識
 from service_api.utils.image_utils       import (
@@ -58,9 +61,10 @@ class BoxDetectionPipeline:
 
     def run(
         self,
-        image_bytes:   bytes,        # 上傳的圖片原始 bytes
-        filename:      str,          # 原始檔名（放進回應供識別）
-        include_image: bool = False, # 是否在回應中附上標注圖片
+        image_bytes:      bytes,        # 上傳的圖片原始 bytes
+        filename:         str,          # 原始檔名（放進回應供識別）
+        include_image:    bool = False, # 是否在回應中附上標注圖片
+        print_confidence: bool = False, # True 時，逐一印出命中 box 的 YOLO confidence
     ) -> DetectResponse:
         """
         對上傳圖片執行完整偵測流程，回傳結構化結果。
@@ -104,11 +108,15 @@ class BoxDetectionPipeline:
             cy = (ymin + ymax) / 2 / 1000 * img_h
 
             # 4b. 找出中心點落在哪個 YOLO mask 內；沒有命中就捨棄這筆 Gemini 結果
-            matched_polygon = _find_containing_polygon(detection.polygons, cx, cy)
-            if matched_polygon is None:
+            matched_index = _find_containing_polygon_index(detection.polygons, cx, cy)
+            if matched_index is None:
                 continue
+            matched_polygon = detection.polygons[matched_index]
+            matched_conf    = detection.confs[matched_index]
 
             box_id += 1
+            if print_confidence:
+                print(f"[CONFIDENCE] box_id={box_id} yolo_confidence={matched_conf:.4f}")
 
             # 4c. mask 輪廓點正規化（除以圖片寬高，值域 0.0~1.0，與圖片尺寸無關）
             normalized_mask = [
@@ -116,14 +124,16 @@ class BoxDetectionPipeline:
                 for x, y in matched_polygon
             ]
 
-            product_name = gbox.get("product_name") or "未知品項"
+            matched      = match_product(gbox.get("product_name"))
+            brand_name   = matched["brand"]
+            product_name = matched["name"] or "未知品項"
             expiry       = _gemini_date_to_info(gbox.get("expiration_date"))
             mfg          = _gemini_date_to_info(gbox.get("manufacturer_date"))
 
             box_results.append(BoxResult(
                 box_id           = box_id,
                 mask             = normalized_mask,
-                product          = ProductInfo(product_name=product_name),
+                product          = ProductInfo(brand_name=brand_name, product_name=product_name),
                 expiry_date      = expiry,
                 manufacture_date = mfg,
             ))
@@ -133,7 +143,8 @@ class BoxDetectionPipeline:
             expiry_str = f"{expiry.year}/{expiry.month}/{expiry.day}" if expiry else "無"
             mfg_str    = f"{mfg.year}/{mfg.month}/{mfg.day}" if mfg else "無"
             date_lines = [f"有效日期：{expiry_str}", f"製造日期：{mfg_str}"]
-            labels.append("\n".join([f"#{box_id} {product_name}"] + date_lines))
+            name_line = f"#{box_id} [{brand_name}] {product_name}" if brand_name else f"#{box_id} {product_name}"
+            labels.append("\n".join([name_line] + date_lines))
 
         # ── 步驟 5：視覺化（選用）─────────────────────────────────────────────
         annotated_b64: str | None = None
@@ -152,22 +163,22 @@ class BoxDetectionPipeline:
 
 # ── 內部輔助函式 ──────────────────────────────────────────────────────────────
 
-def _find_containing_polygon(
+def _find_containing_polygon_index(
     polygons: list[np.ndarray],  # 所有 YOLO mask polygon
     cx: float,                   # Gemini box_2d 中心點 x（原圖像素座標）
     cy: float,                   # Gemini box_2d 中心點 y（原圖像素座標）
-) -> np.ndarray | None:
+) -> int | None:
     """
-    找出「包含中心點 (cx, cy)」的第一個 mask polygon。
+    找出「包含中心點 (cx, cy)」的第一個 mask polygon 的索引。
 
     Returns:
-        命中的 polygon（np.ndarray），沒有任何 mask 包含該點則回傳 None。
+        命中的 polygon 在 polygons 中的索引，沒有任何 mask 包含該點則回傳 None。
     """
-    for polygon in polygons:
+    for index, polygon in enumerate(polygons):
         pts = polygon.astype(np.float32)
         # cv2.pointPolygonTest：>=0 代表點在多邊形內部或邊界上
         if cv2.pointPolygonTest(pts, (float(cx), float(cy)), False) >= 0:
-            return polygon
+            return index
     return None
 
 

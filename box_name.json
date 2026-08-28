@@ -1,0 +1,139 @@
+{
+  "products": [
+    {
+      "brand": "樂事",
+      "name": "洋芋片 青檸享清新口味",
+      "keywords": ["樂事", "洋芋片", "青檸"]
+    },
+    {
+      "brand": "華元",
+      "name": "玉黍叔 甜辣口味",
+      "keywords": ["玉黍叔"]
+    },
+    {
+      "brand": "華元",
+      "name": "真魷味 紅燒口味",
+      "keywords": ["真魷味", "真鱿味"]
+    },
+    {
+      "brand": "益生菌",
+      "name": "小Q蒟蒻果凍 葡萄",
+      "keywords": ["小Q", "蒟蒻", "益生菌"]
+    },
+    {
+      "brand": "來一客",
+      "name": "韓式泡菜風味",
+      "keywords": ["韓式泡菜"]
+    },
+    {
+      "brand": "來一客",
+      "name": "牛肉蔬菜風味",
+      "keywords": ["牛肉蔬菜"]
+    },
+    {
+      "brand": "來一客",
+      "name": "鮮蝦魚板風味",
+      "keywords": ["鮮蝦魚板", "Seafood"]
+    },
+      {
+      "brand": "MOS BURGER",
+      "name": "蕃茄燉雞肉",
+      "keywords": ["MOS BURGER 蕃茄燉雞肉"]
+    },
+    {
+      "brand": "MOS BURGER",
+      "name": "蕃茄燉牛肉",
+      "keywords": ["MOS BURGER 蕃茄燉牛肉"]
+    },
+    {
+      "brand": "MOS BURGER",
+      "name": "日式咖哩雞肉",
+      "keywords": ["MOS BURGER 日式咖哩雞肉"]
+    },  
+    {
+      "brand": "MOS BURGER",
+      "name": "日式咖哩牛肉",
+      "keywords": ["MOS BURGER 日式咖哩牛肉"]
+    },
+    {
+      "brand": "MOS BURGER",
+      "name": "日式咖哩豬肉",
+      "keywords": ["MOS BURGER 日式咖哩豬肉"]
+    },  
+    {
+      "brand": "維他露",
+      "name": "維他露P",
+      "keywords": ["維他露", "維他露P"]
+    },
+    {
+      "brand": "科學麵",
+      "name": "科學麵 原味 五合一",
+      "keywords": ["科學麵", "科學超", "科学超"]
+    },
+    {
+      "brand": "科學麵",
+      "name": "科學麵 原味 五合一",
+      "keywords": ["科學麵", "科學超", "科学超"]
+    },
+    {
+      "brand": "VITALON",
+      "name": "舒跑 Super Supau 清爽低負擔",
+      "keywords": ["VITALON", "舒跑", "清爽低負擔"]
+    },
+    {
+      "brand": "VITALON",
+      "name": "舒跑 Super Supau 清爽更健康",
+      "keywords": ["VITALON", "舒跑", "清爽更健康"]
+    },
+    {
+      "brand": "COCO CLUB",
+      "name": "100% Coconut Water 酷椰嶼椰子俱樂部100%椰子水",
+      "keywords": ["COCO CLUB", "Coconut Water", "酷椰嶼"]
+    },
+    {
+      "brand": "Coca-Cola",
+      "name": "mini 迷你罐 經典原味",
+      "keywords": ["Coca-Cola", "mini", "ORIGINAL TASTE"]
+    },
+    {
+      "brand": "鴻鑫福",
+      "name": "390 紙湯杯",
+      "keywords": ["390 紙湯杯", "390紙湯杯"]
+    },
+    {
+      "brand": "totempak",
+      "name": "780 湯杯",
+      "keywords": ["totempak", "780 湯杯", "780湯杯"]
+    },
+    {
+      "brand": null,
+      "name": "環保紙湯杯",
+      "keywords": ["環保紙湯杯", "環保"]
+    },
+    {
+      "brand": "雁牌",
+      "name": "薑母茶",
+      "keywords": ["雁牌", "薑母茶", "姜母茶"]
+    },
+    {
+      "brand": "統一",
+      "name": "冰塊",
+      "keywords": ["統一冰塊", "統一"]
+    },
+    {
+      "brand": "蘇菲",
+      "name": "彈力貼身",
+      "keywords": ["蘇菲", "彈力貼身"]
+    },
+    {
+      "brand": "琦美製冰股份有限公司",
+      "name": "冰塊",
+      "keywords": ["琦美製冰", "琦美"]
+    },
+    {
+      "brand": "Paxlovid",
+      "name": "150 mg/100 mg tablets",
+      "keywords": ["Paxlovid", "150 mg/100 mg tablets"]
+    }
+  ]
+}

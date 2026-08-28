@@ -25,10 +25,10 @@ load_dotenv(ROOT_DIR / ".env")
 # YOLO 模型權重路徑，可用環境變數 YOLO_MODEL_PATH 覆蓋
 YOLO_MODEL_PATH: str = os.getenv(
     "YOLO_MODEL_PATH",
-    str(ROOT_DIR / "models/yolo_model/box_segmentation/best_26x_seg_20260702.pt"),
+    str(ROOT_DIR / "models/yolo_model/box_segmentation/best_26x_seg_20260828.pt"),
 )
 # 低於此信心值的偵測結果會被過濾（0.0~1.0，越高越嚴格）
-YOLO_CONF_THRESHOLD: float = float(os.getenv("YOLO_CONF", "0.80"))
+YOLO_CONF_THRESHOLD: float = float(os.getenv("YOLO_CONF", "0.70"))
 # 推論時將圖片縮放至此邊長（須與訓練時一致）
 YOLO_IMG_SIZE: int = int(os.getenv("YOLO_IMGSZ", "640"))
 
@@ -37,6 +37,11 @@ YOLO_IMG_SIZE: int = int(os.getenv("YOLO_IMGSZ", "640"))
 GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
 # 使用的 Gemini 模型名稱
 GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite")
+
+# ── 品名資料庫比對設定 ─────────────────────────────────────────────────────────
+# 紙箱品名資料庫路徑（brand/name/keywords），Gemini 辨識出的 product_name 會與此資料庫
+# 做模糊比對，取得正確的 brand/name；可用環境變數 BOX_DB_PATH 覆蓋
+BOX_DB_PATH: str = os.getenv("BOX_DB_PATH", str(ROOT_DIR / "box_name.json"))
 
 # ── 視覺化設定 ────────────────────────────────────────────────────────────────
 # 中文字型路徑（Ubuntu Noto Sans CJK）

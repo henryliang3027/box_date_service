@@ -7,32 +7,38 @@
 ## 辨識流程
 
 1. YOLO segmentation 偵測整張圖中所有紙箱，取得每個紙箱的 mask polygon
-2. Gemini（`test_gemini_ocr_api.py` 的 prompt/schema）對整張圖推論，取得每個紙箱的
+2. Gemini（`API_Test/gemini_ocr.py` 的 prompt/schema）對整張圖推論，取得每個紙箱的
    `product_name` / `manufacturer_date` / `expiration_date` / `box_2d`
 3. 將每筆 Gemini 結果的 `box_2d` 換算成中心點座標，判斷該中心點是否落在某個 YOLO mask 內
    - 落在 mask 內 → 保留該 mask，以 Gemini 的品名/日期組成一筆結果
    - 沒有落在任何 mask 內 → 捨棄
-4. `total_boxes` = YOLO mask 與 Gemini box_2d 皆命中的紙箱數
+4. 將 Gemini 辨識出的 `product_name` 與 `box_name.json` 資料庫（brand/name/keywords）做
+   模糊比對，取得正確、統一的 `brand_name` / `product_name`；比對不到時 `brand_name` 為
+   `null`，`product_name` 沿用 Gemini 的原始文字
+5. `total_boxes` = YOLO mask 與 Gemini box_2d 皆命中的紙箱數
 
 ## 回應格式重點（相較舊版的差異）
 
 - `mask`：採用命中的 YOLO segmentation mask（而非 Gemini 的 box_2d）
 - `confidence` 欄位已移除
-- `product` 只保留 `product_name`（移除 `brand` / `name`）
+- `product` 包含 `brand_name`（資料庫比對到的品牌，查無則為 `null`）與 `product_name`
+  （資料庫比對到的品名，查無則沿用 Gemini 原始辨識文字）
 - `expiry_date` / `manufacture_date` 都來自 Gemini 的推論結果
 
 ## 目錄結構
 
 ```
 box_date_service/
+├── box_name.json                ← 紙箱品名資料庫（brand/name/keywords，供模糊比對）
 ├── service_api/
 │   ├── main.py                ← FastAPI 入口、路由定義
-│   ├── config.py               ← 設定常數（YOLO 路徑、Gemini API Key/Model 等）
+│   ├── config.py               ← 設定常數（YOLO 路徑、Gemini API Key/Model、BOX_DB_PATH 等）
 │   ├── schemas.py               ← API 請求/回應的 Pydantic 格式
-│   ├── pipeline.py              ← 核心流程協調者（YOLO 偵測 → Gemini 整圖推論 → mask 比對）
+│   ├── pipeline.py              ← 核心流程協調者（YOLO 偵測 → Gemini 整圖推論 → mask 比對 → 品名資料庫比對）
 │   ├── services/
 │   │   ├── detector.py          ← YOLO 封裝
-│   │   └── gemini_client.py     ← Gemini 整圖推論封裝
+│   │   ├── gemini_client.py     ← Gemini 整圖推論封裝
+│   │   └── box_matcher.py       ← 品名資料庫模糊比對封裝
 │   └── utils/
 │       └── image_utils.py       ← 影像處理工具（裁切、繪圖）
 └── models/yolo_model/box_segmentation/  ← YOLO 權重

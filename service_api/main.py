@@ -285,9 +285,10 @@ def detect_show_image(
 
     pipeline: BoxDetectionPipeline = app.state.pipeline
     result = pipeline.run(
-        image_bytes   = image_bytes,
-        filename      = file.filename or "unknown.jpg",
-        include_image = True,  # 一定要畫標注圖，才有東西可以回傳
+        image_bytes      = image_bytes,
+        filename         = file.filename or "unknown.jpg",
+        include_image    = True,  # 一定要畫標注圖，才有東西可以回傳
+        print_confidence = True,  # 印出每個命中 box 的 YOLO confidence
     )
 
     if result.annotated_image_base64 is None:
