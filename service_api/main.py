@@ -148,13 +148,6 @@ def detect(request: DetectRequest) -> DetectResponse:
 """
 上傳一張圖片（`file`），API 會偵測照片中的紙箱，並回傳完整結果的 JSON。
 
-### 辨識流程
-
-1. YOLO segmentation 偵測所有紙箱，取得每個紙箱的 mask polygon
-2. Gemini 對整張圖推論，取得每個紙箱的 product_name / manufacturer_date / expiration_date / box_2d
-3. 計算每筆 Gemini 結果 box_2d 的中心點；中心點落在哪個 YOLO mask 內，就保留該 mask + Gemini 資訊
-4. 中心點沒有落在任何 YOLO mask 內的 Gemini 結果，直接捨棄
-
 ### 請求參數
 
 - `file`（必填）：圖片檔案，JPG / PNG
@@ -163,11 +156,11 @@ def detect(request: DetectRequest) -> DetectResponse:
 ### 回應欄位
 
 - `filename`：上傳的原始檔名
-- `total_boxes`：YOLO mask 與 Gemini box_2d 皆命中的紙箱總數
+- `total_boxes`：偵測到的紙箱總數
 - `boxes`：每個紙箱的詳細結果，每筆包含：
   - `box_id`：紙箱編號，從 1 開始
-  - `mask`：命中的 YOLO mask 輪廓座標點列表 `[[x, y], ...]`，已除以圖片寬高正規化（值域 0.0~1.0）
-  - `product`：Gemini 辨識到的品項 `{product_name}`
+  - `mask`：紙箱輪廓座標點列表 `[[x, y], ...]`，已除以圖片寬高正規化（值域 0.0~1.0）
+  - `product`：辨識到的品項 `{brand_name, product_name}`，`brand_name` 無法辨識為 `null`
   - `expiry_date` / `manufacture_date`：`{year, month, day}`，無法解析為 `null`
 - `annotated_image_base64`：含標注結果的 JPEG 圖片（Base64 編碼），僅在 `include_annotated_image=true` 時才會回傳，否則為 `null`
 
@@ -181,7 +174,7 @@ def detect(request: DetectRequest) -> DetectResponse:
     {
       "box_id": 1,
       "mask": [[0.12, 0.08], [0.45, 0.08], [0.45, 0.51], [0.12, 0.51]],
-      "product": {"product_name": "洋芋片 青檸口味"},
+      "product": {"brand_name": "義美", "product_name": "洋芋片 青檸口味"},
       "expiry_date": {"year": "2027", "month": "01", "day": "13"},
       "manufacture_date": null
     }
@@ -209,10 +202,12 @@ data = resp.json()
 
 print(f"共偵測到 {data['total_boxes']} 個紙箱")
 for box in data["boxes"]:
-    product = box["product"]["product_name"] if box["product"] else "未知品項"
+    product = box["product"]
+    brand   = product["brand_name"] if product and product["brand_name"] else ""
+    name    = product["product_name"] if product else "未知品項"
     expiry  = box["expiry_date"]
     expiry_str = f"{expiry['year']}-{expiry['month']}-{expiry['day']}" if expiry else "無法解析"
-    print(f"box_id={box['box_id']} product={product} expiry_date={expiry_str}")
+    print(f"box_id={box['box_id']} product={brand}{name} expiry_date={expiry_str}")
 
 if data["annotated_image_base64"]:
     image = Image.open(BytesIO(base64.b64decode(data["annotated_image_base64"])))
@@ -244,9 +239,10 @@ def detect_image(
 
     pipeline: BoxDetectionPipeline = app.state.pipeline
     return pipeline.run(
-        image_bytes   = image_bytes,
-        filename      = file.filename or "unknown.jpg",
-        include_image = include_annotated_image,  # true 才附標注圖 base64
+        image_bytes      = image_bytes,
+        filename         = file.filename or "unknown.jpg",
+        include_image    = include_annotated_image,  # true 才附標注圖 base64
+        print_confidence = True,  # 印出每個命中 box 的 YOLO confidence（同 /detect/show_image）
     )
 
 
