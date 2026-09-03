@@ -21,6 +21,7 @@ API route 只需呼叫 pipeline.run()，不需知道各服務的細節。
 
 import base64                   # 將標注圖片編碼為 base64 字串
 import time                     # 計算 YOLO / Gemini 耗時（DEBUG 用）
+from pathlib import Path        # 計算 timing log 檔案路徑
 
 import cv2                      # 解碼上傳的圖片 bytes、point-in-polygon 判斷
 import numpy as np              # numpy array 操作
@@ -86,14 +87,18 @@ class BoxDetectionPipeline:
         # ── 步驟 2：YOLO 推論，取得所有紙箱的 mask polygon ──────────────────
         yolo_t0   = time.time()
         detection = self.detector.detect(img_bgr)          # 傳入 BGR numpy array
+        yolo_time = time.time() - yolo_t0
         if config.DEBUG:
-            print(f"[DEBUG] YOLO segmentation time: {time.time() - yolo_t0:.3f}s  boxes={detection.total}")
+            print(f"[DEBUG] YOLO segmentation time: {yolo_time:.3f}s  boxes={detection.total}")
 
         # ── 步驟 3：Gemini 對整張圖推論，取得所有紙箱的品名/日期/box_2d ──────
         gemini_t0    = time.time()
         gemini_boxes = self.gemini.detect(image_bytes, filename=filename)
+        gemini_time  = time.time() - gemini_t0
         if config.DEBUG:
-            print(f"[DEBUG] Gemini inference time: {time.time() - gemini_t0:.3f}s  boxes={len(gemini_boxes)}")
+            print(f"[DEBUG] Gemini inference time: {gemini_time:.3f}s  boxes={len(gemini_boxes)}")
+
+        _log_timing(filename, yolo_time, gemini_time)
 
         # ── 步驟 4：逐一比對每筆 Gemini 結果與 YOLO mask ────────────────────
         box_results:       list[BoxResult]   = []  # 收集每個 box 的結構化結果
@@ -162,6 +167,23 @@ class BoxDetectionPipeline:
 
 
 # ── 內部輔助函式 ──────────────────────────────────────────────────────────────
+
+_TIMING_LOG_PATH = str(Path(__file__).resolve().parent.parent / "logs" / "timing_log.csv")
+
+
+def _log_timing(filename: str, yolo_time: float, gemini_time: float) -> None:
+    """把每次請求的 YOLO / Gemini 耗時附加寫入 CSV，供效能分析用。"""
+    import csv
+    import os
+
+    os.makedirs(os.path.dirname(_TIMING_LOG_PATH), exist_ok=True)
+    file_exists = os.path.exists(_TIMING_LOG_PATH)
+    with open(_TIMING_LOG_PATH, "a", newline="") as f:
+        writer = csv.writer(f)
+        if not file_exists:
+            writer.writerow(["filename", "yolo_time_s", "gemini_time_s", "total_time_s"])
+        writer.writerow([filename, f"{yolo_time:.3f}", f"{gemini_time:.3f}", f"{yolo_time + gemini_time:.3f}"])
+
 
 def _find_containing_polygon_index(
     polygons: list[np.ndarray],  # 所有 YOLO mask polygon

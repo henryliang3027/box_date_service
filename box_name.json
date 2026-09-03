@@ -1,39 +1,49 @@
 {
   "products": [
     {
+      "brand": "多力多滋",
+      "name": "玉米片 超濃起司口味",
+      "keywords": ["多力多滋 玉米片 超濃起司口味"]
+    },
+    {
       "brand": "樂事",
       "name": "洋芋片 青檸享清新口味",
       "keywords": ["樂事 洋芋片 青檸享清新口味"]
     },
     {
+      "brand": "樂事",
+      "name": "洋芋片 美國經典原味",
+      "keywords": ["樂事 洋芋片 美國經典原味"]
+    },
+    {
       "brand": "華元",
       "name": "玉黍叔 甜辣口味",
-      "keywords": ["玉黍叔"]
+      "keywords": ["華元 玉黍叔 甜辣口味"]
     },
     {
       "brand": "華元",
       "name": "真魷味 紅燒口味",
-      "keywords": ["真魷味", "真鱿味"]
+      "keywords": ["華元 真魷味 紅燒口味"]
     },
     {
-      "brand": "益生菌",
-      "name": "小Q蒟蒻果凍 葡萄",
-      "keywords": ["小Q", "蒟蒻", "益生菌"]
+      "brand": "活益比菲多",
+      "name": "益生菌小Q蒟蒻果凍 葡萄",
+      "keywords": ["活益比菲多 益生菌小Q蒟蒻果凍"]
     },
     {
       "brand": "來一客",
       "name": "韓式泡菜風味",
-      "keywords": ["韓式泡菜"]
+      "keywords": ["來一客 韓式泡菜風味"]
     },
     {
       "brand": "來一客",
       "name": "牛肉蔬菜風味",
-      "keywords": ["牛肉蔬菜"]
+      "keywords": ["來一客 牛肉蔬菜風味"]
     },
     {
       "brand": "來一客",
       "name": "鮮蝦魚板風味",
-      "keywords": ["鮮蝦魚板", "Seafood"]
+      "keywords": ["來一客 鮮蝦魚板風味"]
     },
       {
       "brand": "MOS BURGER",
@@ -78,7 +88,7 @@
     {
       "brand": "COCO CLUB",
       "name": "100% Coconut Water 酷椰嶼椰子俱樂部100%椰子水",
-      "keywords": ["COCO CLUB", "Coconut Water", "酷椰嶼"]
+      "keywords": ["Coconut Water 酷椰嶼椰子俱樂部100%椰子水", "酷椰嶼"]
     },
     {
       "brand": "Coca-Cola",
