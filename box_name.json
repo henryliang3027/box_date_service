@@ -3,7 +3,7 @@
     {
       "brand": "樂事",
       "name": "洋芋片 青檸享清新口味",
-      "keywords": ["樂事", "洋芋片", "青檸"]
+      "keywords": ["樂事 洋芋片 青檸享清新口味"]
     },
     {
       "brand": "華元",
@@ -71,19 +71,9 @@
       "keywords": ["科學麵", "科學超", "科学超"]
     },
     {
-      "brand": "科學麵",
-      "name": "科學麵 原味 五合一",
-      "keywords": ["科學麵", "科學超", "科学超"]
-    },
-    {
       "brand": "VITALON",
       "name": "舒跑 Super Supau 清爽低負擔",
       "keywords": ["VITALON", "舒跑", "清爽低負擔"]
-    },
-    {
-      "brand": "VITALON",
-      "name": "舒跑 Super Supau 清爽更健康",
-      "keywords": ["VITALON", "舒跑", "清爽更健康"]
     },
     {
       "brand": "COCO CLUB",
@@ -134,6 +124,21 @@
       "brand": "Paxlovid",
       "name": "150 mg/100 mg tablets",
       "keywords": ["Paxlovid", "150 mg/100 mg tablets"]
+    },
+    {
+      "brand": "TAISUN 泰山",
+      "name": "強氣泡水",
+      "keywords": ["TAISUN 泰山 強氣泡水", "泰山 強氣泡水"]
+    },
+    {
+      "brand": "水事紀",
+      "name": "麥飯石礦泉水",
+      "keywords": ["水事紀 麥飯石礦泉水"]
+    },
+    {
+      "brand": "悅氏",
+      "name": "Light 鹼性水",
+      "keywords": ["悅氏 Light 鹼性水"]
     }
   ]
 }

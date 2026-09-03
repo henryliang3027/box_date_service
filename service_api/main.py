@@ -72,12 +72,9 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Box and Date Recognition API",               # Swagger UI 頁面標題
     description=(
-        "紙箱偵測（YOLO segmentation）+ 品名與日期辨識（Gemini）的整合 API\n\n"
-        "**完整流程**：上傳圖片 → YOLO 偵測紙箱 mask → "
-        "Gemini 對整張圖辨識品名/日期/box_2d → "
-        "以 box_2d 中心點比對 YOLO mask，命中才保留該筆結果"
+        "紙箱偵測 + 品項比對 + 日期解析的整合辨識 API\n\n"
     ),
-    version="1.0.0",
+    version="1.1.0",
     lifespan=lifespan,  # 使用自訂 lifespan 取代已棄用的 on_event("startup")
 )
 

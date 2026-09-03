@@ -116,4 +116,7 @@ class GeminiBoxClient:
             ),
         )
 
-        return json.loads(response.text)
+        boxes = json.loads(response.text)
+        for box in boxes:
+            print(f"[GEMINI] product_name={box.get('product_name')}")
+        return boxes
