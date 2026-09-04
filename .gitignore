@@ -4,3 +4,4 @@ __pycache__/
 *.pyc
 models/
 logs/
+received_images/

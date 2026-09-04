@@ -33,7 +33,7 @@ from datetime import datetime                # DEBUG 模式下印出圖片接收
 import cv2                                   # 驗證上傳圖片是否可解碼
 import numpy as np                           # 圖片 bytes 轉 numpy array
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile  # FastAPI 核心元件
+from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, UploadFile  # FastAPI 核心元件
 from fastapi.responses import Response       # 直接回傳二進位圖片
 
 from service_api import config               # 所有設定常數
@@ -44,6 +44,25 @@ from service_api.schemas import (
     HealthResponse,    # GET  /health 的回應格式
 )
 from service_api.utils.image_utils import crop_with_mask, pil_to_bytes  # mask 裁切 / 轉 bytes
+
+
+# ── 接收到的圖片存檔（背景任務，不拖慢回應時間）───────────────────────────────
+
+RECEIVED_IMAGES_DIR = Path(__file__).resolve().parent.parent / "received_images"
+
+
+def _save_received_image(image_bytes: bytes, filename: str) -> None:
+    """
+    把收到的原始圖片存檔到 received_images/。
+
+    以 BackgroundTasks 執行：FastAPI 會在回應已送出給客戶端「之後」才呼叫，
+    所以存檔耗時完全不會加到 API 回應時間上。
+    """
+    RECEIVED_IMAGES_DIR.mkdir(parents=True, exist_ok=True)
+    suffix = Path(filename).suffix or ".jpg"
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+    out_path = RECEIVED_IMAGES_DIR / f"{ts}{suffix}"
+    out_path.write_bytes(image_bytes)
 
 
 # ── 應用程式生命週期管理 ──────────────────────────────────────────────────────
@@ -91,48 +110,6 @@ app = FastAPI(
 def health_check() -> HealthResponse:
     """回傳服務狀態。"""
     return HealthResponse(status="ok")
-
-
-# ── 路由：偵測（回傳 JSON）────────────────────────────────────────────────────
-
-@app.post(
-    f"{config.API_PREFIX}/detect",
-    response_model=DetectResponse,
-    tags=["偵測"],
-    summary="上傳圖片，回傳每個紙箱的品名與日期（JSON）",
-    include_in_schema=False,   # 不顯示在 Swagger UI 文件中，但端點仍可正常呼叫
-)
-def detect(request: DetectRequest) -> DetectResponse:
-    """
-    主要偵測端點。
-
-    - 接受 JSON body，圖片以 base64 字串（image_base64）傳入
-    - YOLO 偵測所有紙箱 mask，Gemini 對整張圖辨識品名/日期/box_2d，
-      再以 box_2d 中心點比對 YOLO mask，命中才保留該筆結果
-    - include_image=true 時，回應額外含 base64 編碼的標注圖（JPEG）
-    """
-    try:
-        image_bytes = base64.b64decode(request.image_base64, validate=True)
-    except (base64.binascii.Error, ValueError):
-        raise HTTPException(status_code=400, detail="image_base64 不是合法的 Base64 字串。")
-
-    # 基本驗證：確認 bytes 能被 OpenCV 解碼為有效圖片
-    nparr = np.frombuffer(image_bytes, np.uint8)   # bytes → numpy uint8 array
-    img   = cv2.imdecode(nparr, cv2.IMREAD_COLOR)  # 嘗試解碼
-    if img is None:
-        # cv2.imdecode 回傳 None 代表格式不支援或資料損毀
-        raise HTTPException(
-            status_code=400,
-            detail="無效的圖片格式，請上傳 JPG 或 PNG 檔案。",
-        )
-
-    pipeline: BoxDetectionPipeline = app.state.pipeline
-    return pipeline.run(
-        image_bytes   = image_bytes,
-        filename      = "unknown.jpg",
-        include_image = request.include_image,
-    )
-
 
 # ── 路由：偵測（回傳 JSON，含標注圖 base64）───────────────────────────────────
 
@@ -221,6 +198,7 @@ def detect_image(
         bool,
         Form(description="true 時回應額外附上 Base64 編碼的標注 JPEG 圖片"),
     ] = False,
+    background_tasks: BackgroundTasks = None,
 ) -> DetectResponse:
     """偵測並回傳每個紙箱的品名/日期/mask 座標，並依需求附上標注圖片（base64）。"""
     if config.DEBUG:
@@ -233,6 +211,8 @@ def detect_image(
     img   = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
     if img is None:
         raise HTTPException(status_code=400, detail="無效的圖片格式。")
+
+    background_tasks.add_task(_save_received_image, image_bytes, file.filename or "unknown.jpg")
 
     pipeline: BoxDetectionPipeline = app.state.pipeline
     return pipeline.run(

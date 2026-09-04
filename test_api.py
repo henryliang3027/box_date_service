@@ -23,7 +23,7 @@ from pathlib import Path
 
 import requests
 
-DEFAULT_IMAGE_DIR = "/home/ubuntu/Documents/API_Test/test_images/v1_release"
+DEFAULT_IMAGE_DIR = "/home/ubuntu/Documents/API_Test/test_images/v2"
 DEFAULT_API_BASE  = "http://localhost:8080"
 
 REPO_ROOT       = Path(__file__).resolve().parent
