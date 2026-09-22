@@ -23,8 +23,8 @@ from pathlib import Path
 
 import requests
 
-DEFAULT_IMAGE_DIR = "/home/ubuntu/Documents/API_Test/test_images/v2"
-DEFAULT_API_BASE  = "http://localhost:8080"
+DEFAULT_IMAGE_DIR = "/home/ubuntu/Documents/API_Test/test_images/博亞藥局/"
+DEFAULT_API_BASE  = "http://0.0.0.0:8080/"
 
 REPO_ROOT       = Path(__file__).resolve().parent
 TIMING_LOG_PATH = REPO_ROOT / "logs" / "timing_log.csv"

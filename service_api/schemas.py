@@ -23,8 +23,8 @@ class DateInfo(BaseModel):
 
 class ProductInfo(BaseModel):
     """Gemini 辨識到的產品資訊。"""
-    brand_name:   Optional[str] = Field(None, description="品牌／公司名稱，例如 '義美'；無法辨識為 null")
-    product_name: str = Field(description="品名，例如 '洋芋片 青檸口味'")
+    brand: Optional[str] = Field(None, description="品牌／公司名稱，例如 '義美'；無法辨識為 null")
+    name:  str = Field(description="品名，例如 '洋芋片 青檸口味'")
 
 
 # ── 每個 Box 的結果 ───────────────────────────────────────────────────────────
