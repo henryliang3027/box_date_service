@@ -24,7 +24,7 @@ from pathlib import Path
 import requests
 
 DEFAULT_IMAGE_DIR = "/home/ubuntu/Documents/API_Test/test_images/v2"
-DEFAULT_API_BASE  = "http://localhost:8080"
+DEFAULT_API_BASE  = "https://logistics2.sstc-aiteam.org"
 
 REPO_ROOT       = Path(__file__).resolve().parent
 TIMING_LOG_PATH = REPO_ROOT / "logs" / "timing_log.csv"

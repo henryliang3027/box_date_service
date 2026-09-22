@@ -134,7 +134,7 @@ def health_check() -> HealthResponse:
 - `boxes`：每個紙箱的詳細結果，每筆包含：
   - `box_id`：紙箱編號，從 1 開始
   - `mask`：紙箱輪廓座標點列表 `[[x, y], ...]`，已除以圖片寬高正規化（值域 0.0~1.0）
-  - `product`：辨識到的品項 `{brand_name, product_name}`，`brand_name` 無法辨識為 `null`
+  - `product`：辨識到的品項 `{brand, name}`，`brand` 無法辨識為 `null`
   - `expiry_date` / `manufacture_date`：`{year, month, day}`，無法解析為 `null`
 - `annotated_image_base64`：含標注結果的 JPEG 圖片（Base64 編碼），僅在 `include_annotated_image=true` 時才會回傳，否則為 `null`
 
@@ -148,7 +148,7 @@ def health_check() -> HealthResponse:
     {
       "box_id": 1,
       "mask": [[0.12, 0.08], [0.45, 0.08], [0.45, 0.51], [0.12, 0.51]],
-      "product": {"brand_name": "義美", "product_name": "洋芋片 青檸口味"},
+      "product": {"brand": "義美", "name": "洋芋片 青檸口味"},
       "expiry_date": {"year": "2027", "month": "01", "day": "13"},
       "manufacture_date": null
     }
@@ -167,7 +167,7 @@ from PIL import Image
 
 with open("input.jpg", "rb") as f:
     resp = requests.post(
-        "https://logistics.sstc-aiteam.org/api/v1/detect/image",
+        "https://logistics2.sstc-aiteam.org/api/v1/detect/image",
         files={"file": f},
         data={"include_annotated_image": "true"},
     )
@@ -177,8 +177,8 @@ data = resp.json()
 print(f"共偵測到 {data['total_boxes']} 個紙箱")
 for box in data["boxes"]:
     product = box["product"]
-    brand   = product["brand_name"] if product and product["brand_name"] else ""
-    name    = product["product_name"] if product else "未知品項"
+    brand   = product["brand"] if product and product["brand"] else ""
+    name    = product["name"] if product else "未知品項"
     expiry  = box["expiry_date"]
     expiry_str = f"{expiry['year']}-{expiry['month']}-{expiry['day']}" if expiry else "無法解析"
     print(f"box_id={box['box_id']} product={brand}{name} expiry_date={expiry_str}")
@@ -227,6 +227,7 @@ def detect_image(
 
 @app.post(
     f"{config.API_PREFIX}/detect/show_image",
+    include_in_schema=True,
     tags=["偵測"],
     summary="上傳圖片，直接回傳標注後的 JPEG 圖片（binary）",
     description=(

@@ -138,7 +138,7 @@ class BoxDetectionPipeline:
             box_results.append(BoxResult(
                 box_id           = box_id,
                 mask             = normalized_mask,
-                product          = ProductInfo(brand_name=brand_name, product_name=product_name),
+                product          = ProductInfo(brand=brand_name, name=product_name),
                 expiry_date      = expiry,
                 manufacture_date = mfg,
             ))
