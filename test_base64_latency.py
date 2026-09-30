@@ -5,12 +5,13 @@ test_base64_latency.py — 測量 POST /api/v1/detect/image_base64 的分段 lat
 跟 test_latency.py 測的是同一組三段 latency，差別只在於這個端點的
 請求格式是 JSON body（image_base64 欄位），不是 multipart/form-data 上傳檔案：
 
-  1. upload   : client 送出 → server 收到（上行網路傳輸）
-  2. process  : server 收到 → 辨識完成（server 端運算，YOLO + Gemini）
+  1. upload   : client 送出 → server 收完 body（上行網路傳輸，含圖片資料）
+  2. process  : server 收完 body → 辨識完成（server 端運算，YOLO + Gemini）
   3. download : server 回傳 → client 收到（下行網路傳輸）
 
 server（service_api/main.py 的 TimingMiddleware）會在每個 response 附上：
-  - X-Server-Recv-Time            server 收到 request 的 epoch time
+  - X-Server-Recv-Time            server 收到 request headers 的 epoch time
+  - X-Server-Body-Done-Time       server 收完 request body 的 epoch time
   - X-Server-Send-Time            server 送出 response 的 epoch time
   - X-Server-Inference-Done-Time  辨識完成的 epoch time（僅 /detect/image_base64 會有）
 
@@ -30,7 +31,12 @@ server（service_api/main.py 的 TimingMiddleware）會在每個 response 附上
     RTT 越小代表上下行越對稱、offset 估計越準（NTP 演算法的簡化版）。
 
 server 端運算耗時（process，第2段）完全不受時鐘偏移影響，
-因為 X-Server-Recv-Time 與 X-Server-Inference-Done-Time 都是同一台機器的時間戳。
+因為 X-Server-Body-Done-Time 與 X-Server-Inference-Done-Time 都是同一台機器的時間戳。
+
+ℹ️ upload 結束在「server 收完 body」（X-Server-Body-Done-Time），所以圖片的
+   上行網路傳輸時間算在 upload；multipart / JSON 解析、base64 decode 等
+   server 端處理則算在 process。另外存一欄 headers_ms（client 送出 → server
+   收到 headers），可以看出連線建立本身花多少時間。
 
 ⚠️ 這個 offset 校正假設上下行網路延遲對稱，實際網路不一定對稱，
    估計值可能仍有誤差；若條件允許，建議搭配兩台機器都做好 NTP 校時
@@ -103,13 +109,15 @@ def measure_detect_image_base64(base_url: str, image_base64: str, offset: float)
     server_recv = float(resp.headers["X-Server-Recv-Time"])
     server_send = float(resp.headers["X-Server-Send-Time"])
     server_done = float(resp.headers["X-Server-Inference-Done-Time"])
+    server_body_done = float(resp.headers["X-Server-Body-Done-Time"])
 
     # 校正到同一個時鐘座標系（用 server 時鐘為基準）：client 時間 + offset ≈ server 時鐘下的時間
     t0_corrected = t0 + offset
     t3_corrected = t3 + offset
 
-    upload_s   = server_recv - t0_corrected          # 第1段：client 送出 → server 收到
-    process_s  = server_done - server_recv            # 第2段：server 收到 → 辨識完成（不受時鐘偏移影響）
+    headers_s  = server_recv - t0_corrected           # 參考：client 送出 → server 收到 headers（連線建立 + 第一個封包）
+    upload_s   = server_body_done - t0_corrected      # 第1段：client 送出 → server 收完 body（含圖片上行傳輸）
+    process_s  = server_done - server_body_done       # 第2段：server 收完 body → 辨識完成（不受時鐘偏移影響）
     download_s = t3_corrected - server_send            # 第3段：server 回傳 → client 收到
     total_s    = t3 - t0                                # 總 latency（client 端量測，不受 offset 影響）
 
@@ -118,6 +126,7 @@ def measure_detect_image_base64(base_url: str, image_base64: str, offset: float)
         "upload_ms":   upload_s * 1000,
         "process_ms":  process_s * 1000,
         "download_ms": download_s * 1000,
+        "headers_ms":  headers_s * 1000,
         "status_code": resp.status_code,
     }
 
@@ -159,9 +168,10 @@ def main():
     print("\n📊 統計結果（median / mean / min / max，單位 ms）")
     for key, label in [
         ("total_ms", "total   (client 送出 → client 收到)"),
-        ("upload_ms", "upload  (client 送出 → server 收到)"),
-        ("process_ms", "process (server 收到 → 辨識完成)"),
+        ("upload_ms", "upload  (client 送出 → server 收完 body)"),
+        ("process_ms", "process (server 收完 body → 辨識完成)"),
         ("download_ms", "download(server 回傳 → client 收到)"),
+        ("headers_ms", "headers (client 送出 → server 收到 headers)"),
     ]:
         vals = [r[key] for r in results]
         print(
@@ -173,7 +183,7 @@ def main():
     if args.csv:
         csv_path = Path(args.csv)
         with open(csv_path, "w", newline="") as f:
-            writer = csv.DictWriter(f, fieldnames=["round", "total_ms", "upload_ms", "process_ms", "download_ms", "status_code"])
+            writer = csv.DictWriter(f, fieldnames=["round", "total_ms", "upload_ms", "process_ms", "download_ms", "headers_ms", "status_code"])
             writer.writeheader()
             for i, r in enumerate(results, 1):
                 writer.writerow({"round": i, **r})

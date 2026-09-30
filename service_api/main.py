@@ -36,7 +36,8 @@ import numpy as np                           # 圖片 bytes 轉 numpy array
 
 from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, Request, UploadFile  # FastAPI 核心元件
 from fastapi.responses import Response       # 直接回傳二進位圖片
-from starlette.middleware.base import BaseHTTPMiddleware  # latency 測量中介層
+from starlette.datastructures import MutableHeaders           # latency 測量：在 response 加 header
+from starlette.types import ASGIApp, Message, Receive, Scope, Send  # latency 測量中介層（純 ASGI）
 
 from service_api import config               # 所有設定常數
 from service_api.pipeline import BoxDetectionPipeline  # 核心業務流程
@@ -104,25 +105,66 @@ app = FastAPI(
 #
 # 在每個 response 上附加 server 端時間戳（epoch seconds，float 字串），
 # 讓 client 端能把整趟 request 拆成三段：
-#   1. client 送出 → server 收到（network，上行）      = X-Server-Recv-Time  減去 client 端送出時間
-#   2. server 收到 → 辨識完成（server 端運算）           = X-Server-Inference-Done-Time 減去 X-Server-Recv-Time
+#   1. client 送出 → server 收完 body（network，上行）  = X-Server-Body-Done-Time 減去 client 端送出時間
+#   2. server 收完 body → 辨識完成（server 端運算）      = X-Server-Inference-Done-Time 減去 X-Server-Body-Done-Time
 #   3. server 回傳 → client 收到（network，下行）        = client 端收到時間 減去 X-Server-Send-Time
 #
+# 各時間戳的記錄時機：
+#   - X-Server-Recv-Time          ASGI app 收到 request headers（body 可能還在傳）
+#   - X-Server-Body-Done-Time     收到最後一段 body（http.request 且 more_body=False）
+#                                 → 圖片上傳的網路傳輸時間算在第 1 段，multipart / JSON
+#                                   解析則在這之後，算在第 2 段
+#   - X-Server-Inference-Done-Time 路由自行設定 request.state.t_inference_done
+#   - X-Server-Send-Time          送出 response 開頭（http.response.start）
+#
+# X-Server-Body-Done-Time 只有在路由有讀取 body 時才會出現；
 # X-Server-Inference-Done-Time 只有在路由本身有設定 request.state.t_inference_done
-# 時才會出現（目前是 /detect/image），其餘路由（如 /health）只會有 Recv / Send 兩個時間戳，
-# 可用來做 client-server 時鐘校正（NTP-like offset 估計）。
-class TimingMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request: Request, call_next):
+# 時才會出現。/health 只會有 Recv / Send 兩個時間戳，可用來做 client-server
+# 時鐘校正（NTP-like offset 估計）。
+#
+# 用純 ASGI middleware（而不是 BaseHTTPMiddleware）實作，才能包住 receive()
+# 取得 body 收完的時間點。request.state 底層就是 scope["state"]，所以路由寫入的
+# t_inference_done 可以直接從 scope 讀到。
+class TimingMiddleware:
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
         t_recv = time.time()
-        request.state.t_recv = t_recv
-        response = await call_next(request)
-        t_send = time.time()
-        response.headers["X-Server-Recv-Time"] = repr(t_recv)
-        response.headers["X-Server-Send-Time"] = repr(t_send)
-        t_inference_done = getattr(request.state, "t_inference_done", None)
-        if t_inference_done is not None:
-            response.headers["X-Server-Inference-Done-Time"] = repr(t_inference_done)
-        return response
+        state = scope.setdefault("state", {})
+        state["t_recv"] = t_recv
+        t_body_done: float | None = None
+
+        async def timed_receive() -> Message:
+            nonlocal t_body_done
+            message = await receive()
+            if (
+                t_body_done is None
+                and message["type"] == "http.request"
+                and not message.get("more_body", False)
+            ):
+                t_body_done = time.time()
+                state["t_body_done"] = t_body_done
+            return message
+
+        async def timed_send(message: Message) -> None:
+            if message["type"] == "http.response.start":
+                t_send = time.time()
+                headers = MutableHeaders(scope=message)
+                headers["X-Server-Recv-Time"] = repr(t_recv)
+                headers["X-Server-Send-Time"] = repr(t_send)
+                if t_body_done is not None:
+                    headers["X-Server-Body-Done-Time"] = repr(t_body_done)
+                t_inference_done = state.get("t_inference_done")
+                if t_inference_done is not None:
+                    headers["X-Server-Inference-Done-Time"] = repr(t_inference_done)
+            await send(message)
+
+        await self.app(scope, timed_receive, timed_send)
 
 
 app.add_middleware(TimingMiddleware)
