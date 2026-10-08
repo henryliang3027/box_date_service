@@ -411,7 +411,7 @@ def detect_image(
 
 @app.post(
     f"{config.API_PREFIX}/detect/show_image",
-    include_in_schema=False,
+    include_in_schema=True,
     tags=["偵測"],
     summary="上傳圖片，直接回傳標注後的 JPEG 圖片（binary）",
     description=(

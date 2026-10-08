@@ -116,6 +116,15 @@ class GeminiBoxClient:
             ),
         )
 
+        # 印出本次呼叫的 token 消耗（thoughts 為思考 token，計費同輸出）
+        usage = response.usage_metadata
+        print(
+            f"[GEMINI] tokens: prompt={usage.prompt_token_count} "
+            f"thoughts={usage.thoughts_token_count or 0} "
+            f"output={usage.candidates_token_count or 0} "
+            f"total={usage.total_token_count}"
+        )
+
         boxes = json.loads(response.text)
         for box in boxes:
             print(f"[GEMINI] product_name={box.get('product_name')}")
