@@ -43,6 +43,13 @@ class BoxResult(BaseModel):
     manufacture_date: Optional[DateInfo]     = Field(None, description="製造日期（Gemini），無法解析為 null")
 
 
+class ProductCount(BaseModel):
+    """同一品項（brand + name 相同）的紙箱數量。"""
+    brand: Optional[str] = Field(None, description="品牌／公司名稱；資料庫比對不到為 null")
+    name:  str           = Field(description="品名（資料庫比對到時為資料庫的統一名稱，否則為 Gemini 原始文字）")
+    count: int           = Field(description="此品項的紙箱數量")
+
+
 # ── 偵測請求 ──────────────────────────────────────────────────────────────────
 
 class DetectRequest(BaseModel):
@@ -57,6 +64,7 @@ class DetectResponse(BaseModel):
     """POST /api/v1/detect 的完整回應格式。"""
     filename:                str             = Field(description="上傳的原始檔名")
     total_boxes:             int             = Field(description="YOLO mask 與 Gemini box_2d 皆命中的紙箱總數")
+    product_counts:          list[ProductCount] = Field(description="依品項分組的紙箱數量（數量多到少；同數量依首次出現順序），加總等於 total_boxes")
     boxes:                   list[BoxResult] = Field(description="每個紙箱的詳細結果列表")
     annotated_image_base64:  Optional[str]   = Field(
         None,

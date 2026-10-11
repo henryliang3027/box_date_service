@@ -18,6 +18,7 @@ test_api.py — /api/v1/detect/image 效能測試腳本
 """
 
 import csv
+import os
 import sys
 from pathlib import Path
 
@@ -47,6 +48,7 @@ def run_detect(image_dir: Path, api_base: str) -> None:
         with open(img_path, "rb") as f:
             resp = requests.post(
                 url,
+                headers={"X-API-Key": os.getenv("BOX_API_KEY", "")},
                 files={"file": f},
                 data={"include_annotated_image": "false"},
             )

@@ -1,0 +1,532 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>API 用量 Dashboard</title>
+<style>
+  :root {
+    color-scheme: light;
+    --page:           #f4f3f0;
+    --surface-1:      #fcfcfb;
+    --surface-2:      #f0efec;
+    --border:         #e2e1dc;
+    --grid:           #e8e7e3;
+    --text-primary:   #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted:     #7a7975;
+    --series-1:       #2a78d6;
+    --series-1-hover: #1c5cab;
+    --accent:         #2a78d6;
+    --accent-ink:     #ffffff;
+    --danger:         #c0392b;
+    --tooltip-bg:     #0b0b0b;
+    --tooltip-ink:    #ffffff;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --page:           #111110;
+      --surface-1:      #1a1a19;
+      --surface-2:      #242422;
+      --border:         #33332f;
+      --grid:           #2c2c29;
+      --text-primary:   #ffffff;
+      --text-secondary: #c3c2b7;
+      --text-muted:     #8f8e86;
+      --series-1:       #3987e5;
+      --series-1-hover: #6da7ec;
+      --accent:         #3987e5;
+      --accent-ink:     #ffffff;
+      --danger:         #e66767;
+      --tooltip-bg:     #f4f3f0;
+      --tooltip-ink:    #0b0b0b;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --page:           #111110;
+    --surface-1:      #1a1a19;
+    --surface-2:      #242422;
+    --border:         #33332f;
+    --grid:           #2c2c29;
+    --text-primary:   #ffffff;
+    --text-secondary: #c3c2b7;
+    --text-muted:     #8f8e86;
+    --series-1:       #3987e5;
+    --series-1-hover: #6da7ec;
+    --accent:         #3987e5;
+    --accent-ink:     #ffffff;
+    --danger:         #e66767;
+    --tooltip-bg:     #f4f3f0;
+    --tooltip-ink:    #0b0b0b;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--page);
+    color: var(--text-primary);
+    font: 14px/1.5 system-ui, -apple-system, "Segoe UI", "Noto Sans TC", "Noto Sans CJK TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
+  }
+  main { max-width: 1200px; margin: 0 auto; padding: 24px 16px 48px; }
+  header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+  h1 { font-size: 20px; font-weight: 600; margin: 0; }
+  h2 { font-size: 15px; font-weight: 600; margin: 0 0 12px; }
+  .muted { color: var(--text-muted); font-size: 12px; }
+
+  /* ── 篩選列：圖表上方單一列 ── */
+  .filters {
+    display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px;
+    padding: 12px 16px; margin-bottom: 16px;
+    background: var(--surface-1); border: 1px solid var(--border); border-radius: 8px;
+  }
+  .filters label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--text-secondary); }
+  input, select, button {
+    font: inherit; color: var(--text-primary);
+    background: var(--surface-1); border: 1px solid var(--border); border-radius: 6px;
+    padding: 6px 10px; min-height: 34px;
+  }
+  button { cursor: pointer; }
+  button:hover { background: var(--surface-2); }
+  button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  button.primary:hover { filter: brightness(1.08); }
+  button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .quick { display: flex; gap: 4px; flex-wrap: wrap; }
+  .quick button { padding: 6px 10px; }
+  .quick button[aria-pressed="true"] { background: var(--surface-2); border-color: var(--text-muted); font-weight: 600; }
+  .spacer { flex: 1; }
+
+  /* ── 統計卡 ── */
+  .tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px; }
+  .tile { background: var(--surface-1); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; }
+  .tile .label { font-size: 12px; color: var(--text-secondary); }
+  .tile .value { font-size: 28px; font-weight: 600; margin-top: 4px; }
+  .tile.hero .value { font-size: 48px; line-height: 1.1; }
+
+  .card { background: var(--surface-1); border: 1px solid var(--border); border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+  .card-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+
+  /* ── 圖表 ── */
+  #chart { position: relative; width: 100%; height: 260px; overflow: hidden; }
+  #chart svg { display: block; }
+  #chart .bar { fill: var(--series-1); }
+  #chart .hit:hover + .bar, #chart .hit:focus + .bar { fill: var(--series-1-hover); }
+  #chart .hit { fill: transparent; cursor: default; outline: none; }
+  #chart .grid { stroke: var(--grid); stroke-width: 1; shape-rendering: crispEdges; }
+  #chart .axis-text { fill: var(--text-muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+  #chart .cap-label { fill: var(--text-secondary); font-size: 11px; font-variant-numeric: tabular-nums; }
+  .tooltip {
+    position: absolute; pointer-events: none; z-index: 2;
+    background: var(--tooltip-bg); color: var(--tooltip-ink);
+    border-radius: 6px; padding: 6px 10px; font-size: 12px; white-space: nowrap;
+    transform: translate(-50%, calc(-100% - 8px)); display: none;
+  }
+  .tooltip strong { font-size: 15px; display: block; }
+  .empty { display: flex; align-items: center; justify-content: center; height: 100%; color: var(--text-muted); }
+  details { margin-top: 12px; }
+  summary { cursor: pointer; color: var(--text-secondary); font-size: 13px; }
+
+  /* ── 表格 ── */
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  th { color: var(--text-secondary); font-weight: 600; font-size: 12px; background: var(--surface-2); }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  tbody tr:hover { background: var(--surface-2); }
+  td.filename { max-width: 280px; overflow: hidden; text-overflow: ellipsis; }
+  .pager { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+  .link-btn { padding: 2px 8px; min-height: 26px; font-size: 12px; }
+
+  /* ── 圖片檢視 ── */
+  dialog { border: 1px solid var(--border); border-radius: 10px; padding: 0; background: var(--surface-1); color: var(--text-primary); max-width: min(92vw, 1100px); }
+  dialog::backdrop { background: rgb(0 0 0 / 0.6); }
+  .dialog-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 14px; border-bottom: 1px solid var(--border); }
+  .dialog-body { padding: 12px; }
+  .dialog-body img { display: block; max-width: 100%; max-height: 75vh; margin: 0 auto; border-radius: 4px; }
+
+  .error { color: var(--danger); margin-bottom: 12px; display: none; }
+
+  @media (max-width: 720px) {
+    .tiles { grid-template-columns: repeat(2, 1fr); }
+  }
+  @media (max-width: 640px) {
+    .tile.hero .value { font-size: 40px; }
+    .spacer { display: none; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>API 用量 Dashboard</h1>
+    <span class="muted" id="updated"></span>
+  </header>
+
+  <form class="filters" id="filters">
+    <label>起始日期<input type="date" id="start"></label>
+    <label>結束日期<input type="date" id="end"></label>
+    <label>客戶
+      <select id="customer"><option value="">全部客戶</option></select>
+    </label>
+    <div class="quick" role="group" aria-label="快速區間">
+      <button type="button" data-range="today">今天</button>
+      <button type="button" data-range="7">近 7 天</button>
+      <button type="button" data-range="30">近 30 天</button>
+      <button type="button" data-range="month">本月</button>
+      <button type="button" data-range="lastmonth">上月</button>
+    </div>
+    <button type="submit" class="primary">查詢</button>
+    <span class="spacer"></span>
+    <button type="button" id="export">匯出 CSV</button>
+  </form>
+
+  <div class="error" id="error" role="alert"></div>
+
+  <section class="tiles" aria-label="統計">
+    <div class="tile hero"><div class="label">成功請求次數</div><div class="value" id="t-requests">–</div></div>
+    <div class="tile"><div class="label">辨識紙箱數</div><div class="value" id="t-boxes">–</div></div>
+    <div class="tile"><div class="label">有使用的客戶</div><div class="value" id="t-customers">–</div></div>
+    <div class="tile"><div class="label">日平均請求</div><div class="value" id="t-avg">–</div></div>
+  </section>
+
+  <section class="card">
+    <div class="card-head">
+      <h2>每日成功請求次數</h2>
+      <span class="muted" id="chart-range"></span>
+    </div>
+    <div id="chart"></div>
+    <details>
+      <summary>表格檢視</summary>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>日期</th><th class="num">請求次數</th><th class="num">紙箱數</th></tr></thead>
+          <tbody id="daily-body"></tbody>
+        </table>
+      </div>
+    </details>
+  </section>
+
+  <section class="card">
+    <h2>各客戶統計</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>客戶</th><th class="num">請求次數</th><th class="num">紙箱數</th><th>第一筆</th><th>最後一筆</th></tr></thead>
+        <tbody id="customer-body"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-head">
+      <h2>請求紀錄</h2>
+      <span class="muted" id="req-count"></span>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>收到時間</th><th>客戶</th><th>原始檔名</th><th class="num">紙箱數</th><th class="num">大小</th><th>圖片</th></tr></thead>
+        <tbody id="req-body"></tbody>
+      </table>
+    </div>
+    <div class="pager">
+      <button type="button" id="prev">上一頁</button>
+      <span class="muted" id="page-info"></span>
+      <button type="button" id="next">下一頁</button>
+    </div>
+  </section>
+</main>
+
+<dialog id="viewer">
+  <div class="dialog-head">
+    <span id="viewer-title"></span>
+    <button type="button" id="viewer-close">關閉</button>
+  </div>
+  <div class="dialog-body"><img id="viewer-img" alt=""></div>
+</dialog>
+
+<script>
+(() => {
+  const PAGE_SIZE = 50;
+  const $ = (id) => document.getElementById(id);
+  const fmt = new Intl.NumberFormat("zh-TW");
+  let page = 0;
+
+  // ── 日期工具（本地時間，與伺服器 received_at 一致）──
+  const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  function setRange(kind) {
+    const today = new Date();
+    let s = new Date(today), e = new Date(today);
+    if (kind === "7")  s.setDate(today.getDate() - 6);
+    if (kind === "30") s.setDate(today.getDate() - 29);
+    if (kind === "month") s = new Date(today.getFullYear(), today.getMonth(), 1);
+    if (kind === "lastmonth") {
+      s = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+      e = new Date(today.getFullYear(), today.getMonth(), 0);
+    }
+    $("start").value = iso(s);
+    $("end").value = iso(e);
+    document.querySelectorAll(".quick button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.range === kind)));
+  }
+
+  function params(extra = {}) {
+    const p = new URLSearchParams();
+    if ($("start").value) p.set("start", $("start").value);
+    if ($("end").value) p.set("end", $("end").value);
+    if ($("customer").value) p.set("customer", $("customer").value);
+    for (const [k, v] of Object.entries(extra)) p.set(k, v);
+    return p;
+  }
+
+  async function getJSON(url) {
+    const r = await fetch(url, { credentials: "same-origin" });
+    if (!r.ok) {
+      let msg = `${r.status}`;
+      try { msg = (await r.json()).detail || msg; } catch {}
+      throw new Error(msg);
+    }
+    return r.json();
+  }
+
+  function showError(err) {
+    $("error").textContent = err ? `查詢失敗：${err.message}` : "";
+    $("error").style.display = err ? "block" : "none";
+  }
+
+  // 用 textContent 建立儲存格（客戶代號、檔名皆視為不可信資料）
+  function cell(text, cls) {
+    const td = document.createElement("td");
+    td.textContent = text;
+    if (cls) td.className = cls;
+    return td;
+  }
+  function emptyRow(tbody, cols, text) {
+    const tr = document.createElement("tr");
+    const td = cell(text);
+    td.colSpan = cols;
+    td.style.color = "var(--text-muted)";
+    tr.append(td);
+    tbody.replaceChildren(tr);
+  }
+  const bytes = (n) => n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.round(n / 1024)} KB`;
+
+  // ── 客戶下拉選單 ──
+  async function loadCustomers() {
+    const list = await getJSON("/admin/api/customers");
+    const sel = $("customer");
+    for (const c of list) {
+      const o = document.createElement("option");
+      o.value = c; o.textContent = c;
+      sel.append(o);
+    }
+  }
+
+  // ── 統計卡 + 圖表 + 客戶表 ──
+  let daily = [];
+  async function loadSummary() {
+    const data = await getJSON("/admin/api/summary?" + params());
+    const by = data.by_customer;
+    daily = data.daily;
+
+    const totalReq = by.reduce((a, r) => a + r.requests, 0);
+    const totalBox = by.reduce((a, r) => a + r.total_boxes, 0);
+    $("t-requests").textContent = fmt.format(totalReq);
+    $("t-boxes").textContent = fmt.format(totalBox);
+    $("t-customers").textContent = fmt.format(by.length);
+    $("t-avg").textContent = daily.length ? (totalReq / daily.length).toFixed(1) : "–";
+    $("chart-range").textContent = daily.length ? `${daily[0].day} ～ ${daily[daily.length - 1].day}，共 ${daily.length} 天` : "";
+
+    const cb = $("customer-body");
+    if (!by.length) emptyRow(cb, 5, "這個區間沒有成功請求");
+    else cb.replaceChildren(...by.map((r) => {
+      const tr = document.createElement("tr");
+      tr.append(cell(r.customer), cell(fmt.format(r.requests), "num"), cell(fmt.format(r.total_boxes), "num"),
+                cell(r.first_request), cell(r.last_request));
+      return tr;
+    }));
+
+    const db = $("daily-body");
+    if (!daily.length) emptyRow(db, 3, "沒有資料");
+    else db.replaceChildren(...daily.map((d) => {
+      const tr = document.createElement("tr");
+      tr.append(cell(d.day), cell(fmt.format(d.requests), "num"), cell(fmt.format(d.total_boxes), "num"));
+      return tr;
+    }));
+
+    drawChart();
+  }
+
+  // ── 每日柱狀圖（單一序列，無圖例；標題即序列名稱）──
+  function niceMax(v) {
+    if (v <= 4) return Math.max(v, 1);
+    const pow = 10 ** Math.floor(Math.log10(v));
+    for (const m of [1, 2, 2.5, 5, 10]) if (m * pow >= v) return m * pow;
+    return 10 * pow;
+  }
+  function drawChart() {
+    const box = $("chart");
+    box.replaceChildren();
+    if (!daily.length || daily.every((d) => d.requests === 0)) {
+      const e = document.createElement("div");
+      e.className = "empty";
+      e.textContent = "這個區間沒有成功請求";
+      box.append(e);
+      return;
+    }
+    const NS = "http://www.w3.org/2000/svg";
+    const W = box.clientWidth, H = box.clientHeight;
+    const m = { top: 20, right: 8, bottom: 28, left: 40 };
+    const iw = W - m.left - m.right, ih = H - m.top - m.bottom;
+    const maxV = niceMax(Math.max(...daily.map((d) => d.requests)));
+    const ticks = maxV <= 4 ? maxV : 4;
+    const band = iw / daily.length;
+    const bw = Math.max(2, Math.min(24, band * 0.7));
+    const y = (v) => m.top + ih - (v / maxV) * ih;
+
+    const svg = document.createElementNS(NS, "svg");
+    svg.setAttribute("width", W);
+    svg.setAttribute("height", H);
+    svg.setAttribute("role", "img");
+    svg.setAttribute("aria-label", "每日成功請求次數柱狀圖");
+    const el = (tag, attrs, text) => {
+      const n = document.createElementNS(NS, tag);
+      for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, v);
+      if (text !== undefined) n.textContent = text;
+      svg.append(n);
+      return n;
+    };
+
+    // 格線 + Y 軸刻度
+    for (let i = 0; i <= ticks; i++) {
+      const v = (maxV / ticks) * i;
+      const yy = Math.round(y(v)) + 0.5;
+      el("line", { class: "grid", x1: m.left, x2: W - m.right, y1: yy, y2: yy });
+      el("text", { class: "axis-text", x: m.left - 6, y: yy + 4, "text-anchor": "end" }, fmt.format(Math.round(v)));
+    }
+
+    // X 軸標籤：最多約 8 個，避免擠在一起
+    const step = Math.ceil(daily.length / Math.max(1, Math.floor(iw / 70)));
+    const showCaps = daily.length <= 14;
+    const tip = document.createElement("div");
+    tip.className = "tooltip";
+    const tipV = document.createElement("strong");
+    const tipL = document.createElement("span");
+    tip.append(tipV, tipL);
+
+    daily.forEach((d, i) => {
+      const cx = m.left + band * i + band / 2;
+      if (i % step === 0) el("text", { class: "axis-text", x: cx, y: H - 8, "text-anchor": "middle" }, d.day.slice(5));
+
+      // 命中區：整個 band 高度（比柱子大），hover / focus 都顯示 tooltip
+      const hit = el("rect", { class: "hit", x: m.left + band * i, y: m.top, width: band, height: ih, tabindex: 0 });
+      hit.setAttribute("aria-label", `${d.day}：${d.requests} 次請求，${d.total_boxes} 個紙箱`);
+
+      if (d.requests > 0) {
+        // 4px 圓角在頂端、底部貼齊基線為直角
+        const x0 = cx - bw / 2, y0 = y(d.requests), yb = y(0);
+        const r = Math.min(4, bw / 2, yb - y0);
+        el("path", {
+          class: "bar",
+          d: `M${x0},${yb} V${y0 + r} Q${x0},${y0} ${x0 + r},${y0} H${x0 + bw - r} Q${x0 + bw},${y0} ${x0 + bw},${y0 + r} V${yb} Z`,
+        });
+        if (showCaps) el("text", { class: "cap-label", x: cx, y: y0 - 6, "text-anchor": "middle" }, fmt.format(d.requests));
+      } else {
+        el("path", { class: "bar", d: "" });  // 保持 hit + bar 相鄰，讓 :hover + .bar 選擇器成立
+      }
+
+      const show = () => {
+        tipV.textContent = `${fmt.format(d.requests)} 次請求`;
+        tipL.textContent = `${d.day} · ${fmt.format(d.total_boxes)} 個紙箱`;
+        tip.style.left = `${cx}px`;
+        tip.style.top = `${y(d.requests)}px`;
+        tip.style.display = "block";
+      };
+      const hide = () => { tip.style.display = "none"; };
+      hit.addEventListener("pointerenter", show);
+      hit.addEventListener("pointerleave", hide);
+      hit.addEventListener("focus", show);
+      hit.addEventListener("blur", hide);
+    });
+
+    // 基線
+    el("line", { class: "grid", x1: m.left, x2: W - m.right, y1: Math.round(y(0)) + 0.5, y2: Math.round(y(0)) + 0.5 });
+    box.append(svg, tip);
+  }
+
+  // ── 請求紀錄（分頁）──
+  async function loadRequests() {
+    const data = await getJSON("/admin/api/requests?" + params({ limit: PAGE_SIZE, offset: page * PAGE_SIZE }));
+    const pages = Math.max(1, Math.ceil(data.total / PAGE_SIZE));
+    $("req-count").textContent = `共 ${fmt.format(data.total)} 筆`;
+    $("page-info").textContent = `第 ${page + 1} / ${pages} 頁`;
+    $("prev").disabled = page === 0;
+    $("next").disabled = page + 1 >= pages;
+
+    const tb = $("req-body");
+    if (!data.rows.length) { emptyRow(tb, 6, "這個區間沒有成功請求"); return; }
+    tb.replaceChildren(...data.rows.map((r) => {
+      const tr = document.createElement("tr");
+      const fn = cell(r.original_filename || "", "filename");
+      fn.title = r.original_filename || "";
+      const imgTd = document.createElement("td");
+      if (r.image_path) {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "link-btn";
+        b.textContent = "查看";
+        b.addEventListener("click", () => openImage(r));
+        imgTd.append(b);
+      } else {
+        imgTd.textContent = "存檔失敗";
+        imgTd.style.color = "var(--text-muted)";
+      }
+      tr.append(cell(r.received_at), cell(r.customer), fn, cell(fmt.format(r.num_boxes), "num"), cell(bytes(r.image_bytes), "num"), imgTd);
+      return tr;
+    }));
+  }
+
+  function openImage(r) {
+    $("viewer-title").textContent = `${r.received_at} · ${r.customer} · ${r.original_filename}`;
+    $("viewer-img").src = `/admin/api/images/${r.id}`;
+    $("viewer-img").alt = r.original_filename || "上傳圖片";
+    $("viewer").showModal();
+  }
+  $("viewer-close").addEventListener("click", () => $("viewer").close());
+  $("viewer").addEventListener("click", (e) => { if (e.target === $("viewer")) $("viewer").close(); });
+  $("viewer").addEventListener("close", () => { $("viewer-img").removeAttribute("src"); });
+
+  async function refresh() {
+    showError(null);
+    try {
+      await Promise.all([loadSummary(), loadRequests()]);
+      $("updated").textContent = `更新於 ${new Date().toLocaleTimeString("zh-TW", { hour12: false })}`;
+    } catch (err) {
+      showError(err);
+    }
+  }
+
+  // ── 事件 ──
+  $("filters").addEventListener("submit", (e) => { e.preventDefault(); page = 0; refresh(); });
+  document.querySelectorAll(".quick button").forEach((b) =>
+    b.addEventListener("click", () => { setRange(b.dataset.range); page = 0; refresh(); }));
+  ["start", "end"].forEach((id) => $(id).addEventListener("input", () =>
+    document.querySelectorAll(".quick button").forEach((b) => b.setAttribute("aria-pressed", "false"))));
+  $("customer").addEventListener("change", () => { page = 0; refresh(); });
+  $("prev").addEventListener("click", () => { page--; loadRequests().catch(showError); });
+  $("next").addEventListener("click", () => { page++; loadRequests().catch(showError); });
+  $("export").addEventListener("click", () => { window.location.href = "/admin/api/requests.csv?" + params(); });
+  // 圖表容器寬度變動（視窗縮放、版面重排）時重畫
+  let resizeTimer, lastWidth = 0;
+  new ResizeObserver(([entry]) => {
+    const w = Math.round(entry.contentRect.width);
+    if (w === lastWidth) return;
+    lastWidth = w;
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(drawChart, 100);
+  }).observe($("chart"));
+
+  setRange("30");
+  loadCustomers().catch(showError).finally(refresh);
+})();
+</script>
+</body>
+</html>

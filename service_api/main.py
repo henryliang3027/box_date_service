@@ -15,8 +15,9 @@ main.py — FastAPI 應用程式入口
 API 端點一覽：
   GET  /health                        → 健康檢查
   POST /api/v1/detect                 → 偵測（回傳 JSON）
-  POST /api/v1/detect/image           → 偵測（回傳 JSON，含標注圖 base64 + mask 座標）
+  POST /api/v1/detect/image           → 偵測（回傳 JSON，含標注圖 base64 + mask 座標，需帶 X-API-Key）
   POST /api/v1/detect/show_image      → 偵測（直接回傳標注後的 JPEG 圖片 binary）
+  GET  /admin                         → 客戶用量 dashboard（HTTP Basic 登入，不顯示在 Swagger）
 
 文件：
   啟動後開啟 http://localhost:8080/docs 可看 Swagger UI
@@ -34,13 +35,16 @@ from datetime import datetime                # DEBUG 模式下印出圖片接收
 import cv2                                   # 驗證上傳圖片是否可解碼
 import numpy as np                           # 圖片 bytes 轉 numpy array
 
-from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, Request, UploadFile  # FastAPI 核心元件
+from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, Request, Security, UploadFile  # FastAPI 核心元件
 from fastapi.responses import Response       # 直接回傳二進位圖片
 from starlette.datastructures import MutableHeaders           # latency 測量：在 response 加 header
 from starlette.types import ASGIApp, Message, Receive, Scope, Send  # latency 測量中介層（純 ASGI）
 
 from service_api import config               # 所有設定常數
+from service_api.admin import router as admin_router  # 用量 dashboard（/admin）
 from service_api.pipeline import BoxDetectionPipeline  # 核心業務流程
+from service_api.services.auth import require_customer  # 客戶 API Key 驗證（X-API-Key）
+from service_api.services.usage import record_usage     # 客戶用量紀錄（原圖存檔 + SQLite）
 from service_api.schemas import (
     DetectRequest,     # POST /detect 的請求格式（base64 圖片）
     DetectResponse,    # POST /detect 的回應格式
@@ -98,6 +102,8 @@ app = FastAPI(
     ),
     version="1.1.0",
     lifespan=lifespan,  # 使用自訂 lifespan 取代已棄用的 on_event("startup")
+    # Swagger UI 按 Authorize 輸入的 X-API-Key 存在瀏覽器，重新整理頁面不用重輸
+    swagger_ui_parameters={"persistAuthorization": True},
 )
 
 
@@ -169,6 +175,9 @@ class TimingMiddleware:
 
 app.add_middleware(TimingMiddleware)
 
+# 客戶用量 dashboard（/admin，帳密見 config.ADMIN_USER / ADMIN_PASSWORD）
+app.include_router(admin_router)
+
 
 # ── 路由：健康檢查 ────────────────────────────────────────────────────────────
 
@@ -207,6 +216,7 @@ def health_check() -> HealthResponse:
 
 - `filename`：固定回傳 `"upload.jpg"`（此端點無法取得原始檔名，因為輸入只有 Base64 字串）
 - `total_boxes`：偵測到的紙箱總數
+- `product_counts`：依品項分組的紙箱數量 `[{brand, name, count}]`，數量多到少排序，`count` 加總等於 `total_boxes`
 - `boxes`：每個紙箱的詳細結果，每筆包含：
   - `box_id`：紙箱編號，從 1 開始
   - `mask`：紙箱輪廓座標點列表 `[[x, y], ...]`，已除以圖片寬高正規化（值域 0.0~1.0）
@@ -220,6 +230,9 @@ def health_check() -> HealthResponse:
 {
   "filename": "upload.jpg",
   "total_boxes": 1,
+  "product_counts": [
+    {"brand": "義美", "name": "洋芋片 青檸口味", "count": 1}
+  ],
   "boxes": [
     {
       "box_id": 1,
@@ -301,6 +314,12 @@ def detect_image_base64(
 """
 上傳一張圖片（`file`），API 會偵測照片中的紙箱，並回傳完整結果的 JSON。
 
+### 驗證
+
+此端點需要在 header 帶上 `X-API-Key: <你的 API Key>`。
+缺少或無效的 key 會回傳 `401`。
+在本頁測試時，先點右上角的 **Authorize** 輸入 key。
+
 ### 請求參數
 
 - `file`（必填）：圖片檔案，JPG / PNG
@@ -310,6 +329,7 @@ def detect_image_base64(
 
 - `filename`：上傳的原始檔名
 - `total_boxes`：偵測到的紙箱總數
+- `product_counts`：依品項分組的紙箱數量 `[{brand, name, count}]`，數量多到少排序，`count` 加總等於 `total_boxes`
 - `boxes`：每個紙箱的詳細結果，每筆包含：
   - `box_id`：紙箱編號，從 1 開始
   - `mask`：紙箱輪廓座標點列表 `[[x, y], ...]`，已除以圖片寬高正規化（值域 0.0~1.0）
@@ -323,6 +343,9 @@ def detect_image_base64(
 {
   "filename": "input.jpg",
   "total_boxes": 1,
+  "product_counts": [
+    {"brand": "義美", "name": "洋芋片 青檸口味", "count": 1}
+  ],
   "boxes": [
     {
       "box_id": 1,
@@ -347,6 +370,7 @@ from PIL import Image
 with open("input.jpg", "rb") as f:
     resp = requests.post(
         "https://logistics2.sstc-aiteam.org/api/v1/detect/image",
+        headers={"X-API-Key": "<你的 API Key>"},
         files={"file": f},
         data={"include_annotated_image": "true"},
     )
@@ -354,6 +378,8 @@ resp.raise_for_status()
 data = resp.json()
 
 print(f"共偵測到 {data['total_boxes']} 個紙箱")
+for item in data["product_counts"]:
+    print(f"  {item['brand'] or ''} {item['name']}：{item['count']} 箱")
 for box in data["boxes"]:
     product = box["product"]
     brand   = product["brand"] if product and product["brand"] else ""
@@ -379,10 +405,11 @@ def detect_image(
         Form(description="true 時回應額外附上 Base64 編碼的標注 JPEG 圖片"),
     ] = False,
     background_tasks: BackgroundTasks = None,
+    customer: str = Security(require_customer),  # 驗證 X-API-Key，回傳客戶代號
 ) -> DetectResponse:
     """偵測並回傳每個紙箱的品名/日期/mask 座標，並依需求附上標注圖片（base64）。"""
     if config.DEBUG:
-        print(f"[DEBUG] /detect/image 圖片接收時間：{datetime.now().strftime('%H:%M:%S')}")
+        print(f"[DEBUG] /detect/image 圖片接收時間：{datetime.now().strftime('%H:%M:%S')}  customer={customer}")
 
     image_bytes = file.file.read()  # 讀取上傳圖片 bytes
 
@@ -391,8 +418,6 @@ def detect_image(
     img   = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
     if img is None:
         raise HTTPException(status_code=400, detail="無效的圖片格式。")
-
-    background_tasks.add_task(_save_received_image, image_bytes, file.filename or "unknown.jpg")
 
     pipeline: BoxDetectionPipeline = app.state.pipeline
     result = pipeline.run(
@@ -404,6 +429,18 @@ def detect_image(
     # 辨識完成的時間戳，交給 TimingMiddleware 附加到 response header
     # （X-Server-Inference-Done-Time），供 client 端拆分 latency 區段用。
     request.state.t_inference_done = time.time()
+
+    # 用量紀錄（原圖存檔 + 寫入 SQLite）：背景任務只在 response 成功送出後才執行，
+    # 上面任何一步失敗（400 / 500）都不會記錄，所以只計成功的請求。
+    background_tasks.add_task(
+        record_usage,
+        customer          = customer,
+        endpoint          = request.url.path,
+        received_at       = datetime.fromtimestamp(request.state.t_recv),  # TimingMiddleware 記錄的收到時間
+        original_filename = file.filename or "unknown.jpg",
+        image_bytes       = image_bytes,
+        num_boxes         = result.total_boxes,
+    )
     return result
 
 

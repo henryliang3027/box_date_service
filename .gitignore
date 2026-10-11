@@ -5,3 +5,5 @@ __pycache__/
 models/
 logs/
 received_images/
+api_keys.json
+data/

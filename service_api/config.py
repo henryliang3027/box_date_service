@@ -62,6 +62,21 @@ SEGMENTATION_UNKNOWN_DIR: str = os.getenv(
 # API 路徑前綴（所有偵測端點都掛在這個前綴下）
 API_PREFIX: str = "/api/v1"
 
+# ── 客戶 API Key 設定 ─────────────────────────────────────────────────────────
+# { key: 客戶代號 } 對照表（不進 git），可用環境變數 API_KEYS_PATH 覆蓋
+API_KEYS_PATH: str = os.getenv("API_KEYS_PATH", str(ROOT_DIR / "api_keys.json"))
+
+# ── 客戶用量紀錄設定 ──────────────────────────────────────────────────────────
+# 用量資料庫（每次成功請求一筆，計費依據），可用環境變數 USAGE_DB_PATH 覆蓋
+USAGE_DB_PATH: str = os.getenv("USAGE_DB_PATH", str(ROOT_DIR / "data" / "usage.db"))
+# 客戶上傳原圖存放資料夾（依 <客戶>/<YYYYMMDD>/ 分層），可用環境變數 USAGE_IMAGES_DIR 覆蓋
+USAGE_IMAGES_DIR: str = os.getenv("USAGE_IMAGES_DIR", str(ROOT_DIR / "data" / "customer_images"))
+
+# ── 用量 dashboard（/admin）登入設定 ──────────────────────────────────────────
+# 瀏覽器會跳出帳密視窗（HTTP Basic）；請在 .env 設定。ADMIN_PASSWORD 留空時 dashboard 停用
+ADMIN_USER: str = os.getenv("ADMIN_USER", "admin")
+ADMIN_PASSWORD: str = os.getenv("ADMIN_PASSWORD", "")
+
 # ── 除錯設定 ──────────────────────────────────────────────────────────────────
 # True 時，/detect/image 會印出圖片接收時間（hh:mm:ss）、
 # YOLO 偵測耗時、以及 Gemini 推論耗時

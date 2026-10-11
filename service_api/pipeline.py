@@ -16,7 +16,8 @@ API route 只需呼叫 pipeline.run()，不需知道各服務的細節。
            若中心點沒有落在任何 mask 內 → 捨棄
     → (4) 將 Gemini 的 product_name 與 box_name.json 資料庫做模糊比對，
            取得正確的 brand / name（比對不到則 brand=None，name 沿用原始文字）
-    → (5) 組合回應（含選用的標注圖片）
+    → (5) 依 brand + name 分組，統計每個品項的紙箱數量
+    → (6) 組合回應（含選用的標注圖片）
 """
 
 import base64                   # 將標注圖片編碼為 base64 字串
@@ -30,6 +31,7 @@ from service_api.schemas import (   # Pydantic 回應格式
     BoxResult,
     DateInfo,
     DetectResponse,
+    ProductCount,
     ProductInfo,
 )
 from service_api import config
@@ -151,16 +153,20 @@ class BoxDetectionPipeline:
             name_line = f"#{box_id} [{brand_name}] {product_name}" if brand_name else f"#{box_id} {product_name}"
             labels.append("\n".join([name_line] + date_lines))
 
-        # ── 步驟 5：視覺化（選用）─────────────────────────────────────────────
+        # ── 步驟 5：依品項分組計數（brand + name 相同視為同一品項）────────────
+        product_counts = _count_products(box_results)
+
+        # ── 步驟 6：視覺化（選用）─────────────────────────────────────────────
         annotated_b64: str | None = None
         if include_image and matched_polygons:  # 有命中的 box 才繪製
             result_img = draw_results(img_bgr, matched_polygons, labels)
             annotated_b64 = base64.b64encode(pil_to_bytes(result_img)).decode("utf-8")
 
-        # ── 步驟 6：組合並回傳完整回應 ───────────────────────────────────────
+        # ── 步驟 7：組合並回傳完整回應 ───────────────────────────────────────
         return DetectResponse(
             filename                = filename,
             total_boxes             = len(box_results),
+            product_counts          = product_counts,
             boxes                   = box_results,
             annotated_image_base64  = annotated_b64,
         )
@@ -202,6 +208,19 @@ def _find_containing_polygon_index(
         if cv2.pointPolygonTest(pts, (float(cx), float(cy)), False) >= 0:
             return index
     return None
+
+
+def _count_products(box_results: list[BoxResult]) -> list[ProductCount]:
+    """
+    依 (brand, name) 分組計算每個品項的紙箱數量。
+    排序：數量多到少；數量相同時依該品項在 box_results 中首次出現的順序（dict 保留插入順序）。
+    """
+    counts: dict[tuple[str | None, str], int] = {}
+    for box in box_results:
+        key = (box.product.brand, box.product.name)
+        counts[key] = counts.get(key, 0) + 1
+    ordered = sorted(counts.items(), key=lambda kv: -kv[1])  # sorted 是穩定排序，同數量保留首次出現順序
+    return [ProductCount(brand=brand, name=name, count=count) for (brand, name), count in ordered]
 
 
 def _gemini_date_to_info(d: dict | None) -> DateInfo | None:

@@ -58,6 +58,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import os
 import statistics
 import sys
 import time
@@ -100,6 +101,7 @@ def measure_detect_image(base_url: str, image_path: Path, offset: float) -> dict
     t0 = time.time()  # client 送出時間
     resp = requests.post(
         f"{base_url}/api/v1/detect/image",
+        headers={"X-API-Key": os.getenv("BOX_API_KEY", "")},
         files={"file": (image_path.name, image_bytes, "image/jpeg")},
         data={"include_annotated_image": "false"},
         timeout=120,
