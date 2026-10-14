@@ -159,7 +159,12 @@ class BoxDetectionPipeline:
         # ── 步驟 6：視覺化（選用）─────────────────────────────────────────────
         annotated_b64: str | None = None
         if include_image and matched_polygons:  # 有命中的 box 才繪製
-            result_img = draw_results(img_bgr, matched_polygons, labels)
+            # 右上角品項統計：一個品項一行，例如 "華元 真魷味 紅燒口味: 1"
+            product_lines = [
+                f"{pc.brand} {pc.name}: {pc.count}" if pc.brand else f"{pc.name}: {pc.count}"
+                for pc in product_counts
+            ]
+            result_img = draw_results(img_bgr, matched_polygons, labels, product_lines)
             annotated_b64 = base64.b64encode(pil_to_bytes(result_img)).decode("utf-8")
 
         # ── 步驟 7：組合並回傳完整回應 ───────────────────────────────────────

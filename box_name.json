@@ -107,8 +107,8 @@
       ]
     },
     {
-      "brand": "維他露",
-      "name": "P 暢快活力B2+C",
+      "brand": "維他露P",
+      "name": "維他露P暢快活力B2+C",
       "keywords": [
         "維他露",
         "維他露P",
@@ -117,7 +117,7 @@
     },
     {
       "brand": "科學麵",
-      "name": "原味",
+      "name": "科學麵原味",
       "keywords": [
         "科學麵",
         "科學超",
@@ -737,28 +737,31 @@
       ]
     },
     {
-      "brand": "維維樂",
+      "brand": "維維樂 ACE Health Science",
       "name": "R3活力平衡飲品PLUS(蘋果口味)",
       "keywords": [
+        "ACE Health Science",
         "維維樂R3",
         "活力平衡飲品PLUS",
         "蘋果口味"
       ]
     },
     {
-      "brand": "ACE Health Science",
-      "name": "R3 幼兒活力平衡飲品(柚子口味)",
+      "brand": "維維樂 ACE Health Science",
+      "name": "R3幼兒活力平衡飲品(柚子口味)",
       "keywords": [
         "ACE Health Science",
+        "維維樂R3",
         "幼兒活力平衡飲品",
         "柚子口味"
       ]
     },
     {
-      "brand": "ACE Health Science",
-      "name": "R3 幼兒活力平衡飲品(蘋果口味)",
+      "brand": "維維樂 ACE Health Science",
+      "name": "R3幼兒活力平衡飲品(蘋果口味)",
       "keywords": [
         "ACE Health Science",
+        "維維樂R3",
         "幼兒活力平衡飲品",
         "蘋果口味"
       ]

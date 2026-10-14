@@ -6,8 +6,9 @@ utils/image_utils.py — 影像處理工具函式
   crop_with_mask(img_bgr, polygon)
     給定原圖與 mask polygon，裁切出去背後的 box 區域。
 
-  draw_results(img_bgr, polygons, labels)
-    在原圖上疊加所有 box 的半透明 mask、輪廓線、文字標籤。
+  draw_results(img_bgr, polygons, labels, product_lines)
+    在原圖上疊加所有 box 的半透明 mask、輪廓線、文字標籤，
+    左上角標總數量，右上角標各品項數量（選用）。
 
   pil_to_bytes(image, fmt)
     將 PIL Image 轉為 bytes（用於 API 回傳圖片串流）。
@@ -61,6 +62,7 @@ def draw_results(
     img_bgr:  np.ndarray,
     polygons: list[np.ndarray],
     labels:   list[str],
+    product_lines: list[str] | None = None,
 ) -> Image.Image:
     """
     在原圖上繪製所有 box 的視覺化結果（三層疊加）：
@@ -72,6 +74,8 @@ def draw_results(
         img_bgr:  OpenCV 格式原圖（BGR，shape=(H, W, 3)）
         polygons: 所有 box 的 mask 輪廓點列表（與 labels 等長）
         labels:   每個 box 的顯示文字（可含 \\n 換行）
+        product_lines: 右上角的品項統計，一個品項一行（例如 "華元 真魷味 紅燒口味: 1"）；
+                       None 或空 list 時不繪製
 
     Returns:
         繪製完成的 PIL RGB Image
@@ -126,6 +130,32 @@ def draw_results(
         fill=(255, 255, 255),    # 白色文字
         font=font,
     )
+
+    # ── 右上角：各品項數量（一個品項一行，風格同總數量標籤）────────────────
+    if product_lines:
+        summary      = "\n".join(product_lines)
+        summary_bbox = draw.multiline_textbbox((0, 0), summary, font=font)
+        summary_tw   = summary_bbox[2] - summary_bbox[0]
+        summary_th   = summary_bbox[3] - summary_bbox[1] + 10
+
+        img_w = pil_img.width
+        sx = max(0, img_w - summary_tw - 6 - 1)  # 貼齊右緣（-1 讓外框不被裁掉）
+        sy = 0
+        if sx < count_tw + 6:                    # 圖太窄、會與總數量標籤重疊 → 改放在總數量標籤下方
+            sy = count_th + 6
+
+        draw.rectangle(
+            [sx, sy, sx + summary_tw + 6, sy + summary_th + 6],
+            fill=(0, 0, 0),          # 黑底
+            outline=(255, 255, 255), # 白色外框
+            width=config.LABEL_BORDER_WIDTH,
+        )
+        draw.multiline_text(
+            (sx + 3, sy + 3),
+            summary,
+            fill=(255, 255, 255),    # 白色文字
+            font=font,
+        )
 
     for pts, color, label in zip(polygons, colors, labels):
         pts_int           = pts.astype(np.int32)
