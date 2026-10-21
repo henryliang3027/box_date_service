@@ -29,7 +29,8 @@ CREATE TABLE IF NOT EXISTS usage_log (
     original_filename TEXT,               -- 客戶上傳時的檔名
     image_path        TEXT,               -- 伺服器存檔路徑（相對於 USAGE_IMAGES_DIR）；存檔失敗為 NULL
     image_bytes       INTEGER NOT NULL,   -- 圖片大小（bytes）
-    num_boxes         INTEGER NOT NULL    -- 該次辨識回傳的紙箱數
+    num_boxes         INTEGER NOT NULL,   -- 該次辨識回傳的紙箱數
+    username          TEXT                -- Web 版（/app）登入的帳號；API Key 呼叫為 NULL
 );
 CREATE INDEX IF NOT EXISTS idx_usage_customer_time ON usage_log(customer, received_at);
 CREATE INDEX IF NOT EXISTS idx_usage_time          ON usage_log(received_at);
@@ -42,6 +43,9 @@ def connect() -> sqlite3.Connection:
     conn = sqlite3.connect(config.USAGE_DB_PATH, timeout=10)
     conn.execute("PRAGMA journal_mode=WAL")  # 多個 worker 同時寫入不互卡
     conn.executescript(_SCHEMA)
+    # 舊資料庫（加入 Web 版之前建立的）沒有 username 欄位，補上
+    if "username" not in {r[1] for r in conn.execute("PRAGMA table_info(usage_log)")}:
+        conn.execute("ALTER TABLE usage_log ADD COLUMN username TEXT")
     return conn
 
 
@@ -52,6 +56,7 @@ def record_usage(
     original_filename: str,       # 客戶上傳時的檔名
     image_bytes:       bytes,     # 原圖 bytes
     num_boxes:         int,       # 辨識出的紙箱數
+    username:          str | None = None,  # Web 版登入的帳號（API Key 呼叫不帶）
 ) -> None:
     """
     存原圖到 USAGE_IMAGES_DIR/<客戶>/<YYYYMMDD>/<時間戳><副檔名>，並寫入一筆 usage_log。
@@ -73,8 +78,8 @@ def record_usage(
         with connect() as conn:
             conn.execute(
                 "INSERT INTO usage_log "
-                "(customer, endpoint, received_at, original_filename, image_path, image_bytes, num_boxes) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                "(customer, endpoint, received_at, original_filename, image_path, image_bytes, num_boxes, username) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     customer,
                     endpoint,
@@ -83,6 +88,7 @@ def record_usage(
                     image_rel_path,
                     len(image_bytes),
                     num_boxes,
+                    username,
                 ),
             )
     except sqlite3.Error as e:
@@ -176,8 +182,11 @@ def query_requests(
     where_sql, params = _where(start, end, customer)
     total = conn.execute(f"SELECT COUNT(*) FROM usage_log {where_sql}", params).fetchone()[0]
     limit_sql = f"LIMIT {int(limit)} OFFSET {int(offset)}" if limit is not None else ""
+    # 唯讀連線無法補欄位；舊資料庫還沒寫入過新紀錄時 username 欄位不存在，以 NULL 代替
+    has_username = "username" in {r[1] for r in conn.execute("PRAGMA table_info(usage_log)")}
     rows = conn.execute(
-        f"SELECT id, received_at, customer, endpoint, original_filename, num_boxes, image_bytes, image_path "
+        f"SELECT id, received_at, customer, endpoint, original_filename, num_boxes, image_bytes, image_path, "
+        f"{'username' if has_username else 'NULL'} "
         f"FROM usage_log {where_sql} ORDER BY received_at DESC {limit_sql}",
         params,
     ).fetchall()
@@ -185,6 +194,7 @@ def query_requests(
         {
             "id": r[0], "received_at": r[1][:19], "customer": r[2], "endpoint": r[3],
             "original_filename": r[4], "num_boxes": r[5], "image_bytes": r[6], "image_path": r[7],
+            "username": r[8],
         }
         for r in rows
     ]

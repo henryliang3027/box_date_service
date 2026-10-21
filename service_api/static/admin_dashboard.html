@@ -224,7 +224,7 @@
     </div>
     <div class="table-wrap">
       <table>
-        <thead><tr><th>收到時間</th><th>客戶</th><th>原始檔名</th><th class="num">紙箱數</th><th class="num">大小</th><th>圖片</th></tr></thead>
+        <thead><tr><th>收到時間</th><th>客戶</th><th>來源</th><th>原始檔名</th><th class="num">紙箱數</th><th class="num">大小</th><th>圖片</th></tr></thead>
         <tbody id="req-body"></tbody>
       </table>
     </div>
@@ -462,7 +462,7 @@
     $("next").disabled = page + 1 >= pages;
 
     const tb = $("req-body");
-    if (!data.rows.length) { emptyRow(tb, 6, "這個區間沒有成功請求"); return; }
+    if (!data.rows.length) { emptyRow(tb, 7, "這個區間沒有成功請求"); return; }
     tb.replaceChildren(...data.rows.map((r) => {
       const tr = document.createElement("tr");
       const fn = cell(r.original_filename || "", "filename");
@@ -479,7 +479,9 @@
         imgTd.textContent = "存檔失敗";
         imgTd.style.color = "var(--text-muted)";
       }
-      tr.append(cell(r.received_at), cell(r.customer), fn, cell(fmt.format(r.num_boxes), "num"), cell(bytes(r.image_bytes), "num"), imgTd);
+      // 來源：Web 版（/app）顯示登入帳號，API Key 呼叫顯示 API
+      const source = r.endpoint.startsWith("/app/") ? `Web · ${r.username || ""}` : "API";
+      tr.append(cell(r.received_at), cell(r.customer), cell(source), fn, cell(fmt.format(r.num_boxes), "num"), cell(bytes(r.image_bytes), "num"), imgTd);
       return tr;
     }));
   }

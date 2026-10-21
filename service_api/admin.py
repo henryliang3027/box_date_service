@@ -132,7 +132,7 @@ def requests_csv(
         finally:
             conn.close()
 
-    fields = ["received_at", "customer", "endpoint", "original_filename", "num_boxes", "image_bytes", "image_path"]
+    fields = ["received_at", "customer", "username", "endpoint", "original_filename", "num_boxes", "image_bytes", "image_path"]
     buf = io.StringIO()
     buf.write("﻿")  # BOM：Excel 開啟中文不亂碼
     writer = csv.DictWriter(buf, fieldnames=fields, extrasaction="ignore")

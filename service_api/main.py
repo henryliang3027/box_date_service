@@ -18,6 +18,7 @@ API 端點一覽：
   POST /api/v1/detect/image           → 偵測（回傳 JSON，含標注圖 base64 + mask 座標，需帶 X-API-Key）
   POST /api/v1/detect/show_image      → 偵測（直接回傳標注後的 JPEG 圖片 binary）
   GET  /admin                         → 客戶用量 dashboard（HTTP Basic 登入，不顯示在 Swagger）
+  GET  /app                           → 手機 Web 版（帳號密碼登入後拍照辨識，不顯示在 Swagger）
 
 文件：
   啟動後開啟 http://localhost:8080/docs 可看 Swagger UI
@@ -43,6 +44,7 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send  # latency �
 from service_api import config               # 所有設定常數
 from service_api.admin import router as admin_router  # 用量 dashboard（/admin）
 from service_api.pipeline import BoxDetectionPipeline  # 核心業務流程
+from service_api.webapp import router as webapp_router  # 手機 Web 版（/app）
 from service_api.services.auth import require_customer  # 客戶 API Key 驗證（X-API-Key）
 from service_api.services.usage import record_usage     # 客戶用量紀錄（原圖存檔 + SQLite）
 from service_api.schemas import (
@@ -177,6 +179,8 @@ app.add_middleware(TimingMiddleware)
 
 # 客戶用量 dashboard（/admin，帳密見 config.ADMIN_USER / ADMIN_PASSWORD）
 app.include_router(admin_router)
+# 手機 Web 版（/app，帳號見 web_users.json，用 manage_web_users.py 管理）
+app.include_router(webapp_router)
 
 
 # ── 路由：健康檢查 ────────────────────────────────────────────────────────────

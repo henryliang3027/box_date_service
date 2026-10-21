@@ -1,0 +1,522 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1f6fd1">
+<title>紙箱辨識</title>
+<style>
+  :root {
+    --bg: #f4f5f7;
+    --surface: #ffffff;
+    --border: #dcdfe4;
+    --text: #1b1d21;
+    --text-2: #4d535c;
+    --text-muted: #6f7680;
+    --primary: #1f6fd1;
+    --primary-text: #ffffff;
+    --danger-bg: #fdecec;
+    --danger-text: #a12424;
+    --shadow: 0 1px 2px rgba(0,0,0,.06), 0 2px 8px rgba(0,0,0,.05);
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #121417;
+      --surface: #1c1f24;
+      --border: #30353d;
+      --text: #eceef1;
+      --text-2: #b7bcc4;
+      --text-muted: #8c929b;
+      --primary: #4b90ea;
+      --primary-text: #0b1220;
+      --danger-bg: #3a1c1c;
+      --danger-text: #ffb3b3;
+      --shadow: none;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #121417; --surface: #1c1f24; --border: #30353d; --text: #eceef1; --text-2: #b7bcc4;
+    --text-muted: #8c929b; --primary: #4b90ea; --primary-text: #0b1220; --danger-bg: #3a1c1c;
+    --danger-text: #ffb3b3; --shadow: none; color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 16px/1.5 system-ui, -apple-system, "Segoe UI", "Noto Sans TC", "PingFang TC", sans-serif;
+  }
+  [hidden] { display: none !important; }
+
+  header {
+    position: sticky; top: 0; z-index: 5;
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: calc(10px + env(safe-area-inset-top)) 16px 10px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+  }
+  header h1 { margin: 0; font-size: 18px; font-weight: 650; }
+  .who { display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--text-2); min-width: 0; }
+  .who span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  main { max-width: 640px; margin: 0 auto; padding: 16px 16px 120px; }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    box-shadow: var(--shadow);
+    padding: 16px;
+    margin-bottom: 16px;
+  }
+  .card h2 { margin: 0 0 12px; font-size: 16px; font-weight: 650; }
+
+  /* ── 登入 ── */
+  .login { margin-top: 8vh; }
+  .login p { margin: 0 0 16px; color: var(--text-2); }
+  label.field { display: block; margin-bottom: 14px; font-size: 14px; color: var(--text-2); }
+  label.field input {
+    display: block; width: 100%; margin-top: 6px;
+    padding: 12px; font-size: 16px;            /* 16px 以上手機不會自動放大畫面 */
+    color: var(--text); background: var(--bg);
+    border: 1px solid var(--border); border-radius: 8px;
+  }
+  label.field input:focus { outline: 2px solid var(--primary); outline-offset: 1px; }
+
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    min-height: 48px; padding: 0 18px;
+    font: inherit; font-weight: 600;
+    border-radius: 10px; border: 1px solid var(--border);
+    background: var(--surface); color: var(--text);
+    cursor: pointer; user-select: none;
+  }
+  .btn.primary { background: var(--primary); border-color: var(--primary); color: var(--primary-text); }
+  .btn.block { width: 100%; }
+  .btn[aria-disabled="true"], .btn:disabled { opacity: .5; pointer-events: none; }
+  .btn svg { width: 22px; height: 22px; flex: none; }
+  .link-btn { background: none; border: 0; padding: 6px 0; font: inherit; font-size: 14px; color: var(--primary); cursor: pointer; }
+
+  .error {
+    margin: 0 0 14px; padding: 10px 12px;
+    background: var(--danger-bg); color: var(--danger-text);
+    border-radius: 8px; font-size: 14px;
+  }
+
+  /* ── 底部拍照列 ── */
+  .actions {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 5;
+    display: grid; grid-template-columns: 2fr 1fr; gap: 10px;
+    padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+  }
+  @media (min-width: 672px) {
+    .actions { left: 50%; right: auto; width: 640px; transform: translateX(-50%); border: 1px solid var(--border); border-bottom: 0; border-radius: 12px 12px 0 0; }
+  }
+  .actions input[type=file] { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+
+  /* ── 空狀態 / 辨識中 ── */
+  .empty { text-align: center; color: var(--text-2); padding: 40px 16px; }
+  .empty svg { width: 56px; height: 56px; color: var(--text-muted); }
+  .empty p { margin: 8px 0 0; }
+  .busy { display: flex; align-items: center; gap: 14px; }
+  .busy img { width: 72px; height: 72px; object-fit: cover; border-radius: 8px; flex: none; background: var(--bg); }
+  .busy .t1 { font-weight: 600; }
+  .busy .t2 { font-size: 14px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+  .spinner {
+    width: 22px; height: 22px; flex: none; margin-left: auto;
+    border: 3px solid var(--border); border-top-color: var(--primary); border-radius: 50%;
+    animation: spin .8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 2.4s; } }
+
+  /* ── 結果 ── */
+  .annotated { display: block; width: 100%; padding: 0; border: 0; background: none; cursor: zoom-in; }
+  .annotated img { display: block; width: 100%; height: auto; border-radius: 8px; }
+  .hint { margin: 8px 0 0; font-size: 13px; color: var(--text-muted); }
+
+  .total { display: flex; align-items: baseline; gap: 6px; margin-bottom: 12px; }
+  .total b { font-size: 40px; line-height: 1; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .total span { color: var(--text-2); }
+
+  ul.rows { list-style: none; margin: 0; padding: 0; }
+  ul.rows li {
+    display: flex; justify-content: space-between; align-items: baseline; gap: 12px;
+    padding: 10px 0; border-top: 1px solid var(--border);
+  }
+  ul.rows li:first-child { border-top: 0; }
+  .pname { min-width: 0; overflow-wrap: anywhere; }
+  .brand { display: block; font-size: 13px; color: var(--text-muted); }
+  .count { flex: none; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+  .box { padding: 12px 0; border-top: 1px solid var(--border); }
+  .box:first-child { border-top: 0; padding-top: 0; }
+  .box-head { display: flex; gap: 10px; align-items: baseline; }
+  .box-id {
+    flex: none; min-width: 28px; padding: 0 6px; text-align: center;
+    font-size: 13px; font-weight: 700; border-radius: 6px;
+    background: var(--bg); border: 1px solid var(--border);
+  }
+  dl.dates { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; margin: 6px 0 0 38px; font-size: 14px; }
+  dl.dates dt { color: var(--text-muted); }
+  dl.dates dd { margin: 0; font-variant-numeric: tabular-nums; }
+  .none { color: var(--text-muted); }
+
+  dialog.viewer { padding: 0; border: 0; width: 100vw; max-width: 100vw; height: 100vh; max-height: 100vh; background: #000; }
+  dialog.viewer::backdrop { background: #000; }
+  .viewer-inner { position: relative; width: 100%; height: 100%; overflow: auto; }
+  .viewer-inner img { display: block; width: 100%; height: auto; }
+  .viewer-close {
+    position: fixed; top: calc(12px + env(safe-area-inset-top)); right: 12px;
+    min-height: 40px; padding: 0 14px; border-radius: 20px; border: 0;
+    background: rgba(255,255,255,.9); color: #111; font: inherit; font-weight: 600;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>紙箱辨識</h1>
+  <div class="who" id="who" hidden>
+    <span id="who-name"></span>
+    <button type="button" class="link-btn" id="logout">登出</button>
+  </div>
+</header>
+
+<main>
+  <!-- 登入 -->
+  <section id="login-view" hidden>
+    <form class="card login" id="login-form" novalidate>
+      <h2>登入</h2>
+      <p>請使用管理員提供的帳號密碼。</p>
+      <div class="error" id="login-error" role="alert" hidden></div>
+      <label class="field">帳號
+        <input id="username" name="username" autocomplete="username" autocapitalize="none" spellcheck="false" required>
+      </label>
+      <label class="field">密碼
+        <input id="password" name="password" type="password" autocomplete="current-password" required>
+      </label>
+      <button class="btn primary block" type="submit" id="login-btn">登入</button>
+    </form>
+  </section>
+
+  <!-- 主畫面 -->
+  <section id="app-view" hidden>
+    <div class="error" id="app-error" role="alert" hidden></div>
+
+    <div class="card empty" id="empty">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
+        <path d="M3 8.5A2.5 2.5 0 0 1 5.5 6h1.6l1.4-2h7l1.4 2h1.6A2.5 2.5 0 0 1 21 8.5v9a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 17.5z"/>
+        <circle cx="12" cy="13" r="3.8"/>
+      </svg>
+      <p>按下方「拍照」，對準紙箱拍一張。<br>盡量讓箱子上的品名和日期清楚入鏡。</p>
+    </div>
+
+    <div class="card busy" id="busy" hidden aria-live="polite">
+      <img id="busy-img" alt="">
+      <div>
+        <div class="t1" id="busy-text">辨識中…</div>
+        <div class="t2" id="busy-time">0 秒</div>
+      </div>
+      <div class="spinner" aria-hidden="true"></div>
+    </div>
+
+    <div id="result" hidden>
+      <div class="card">
+        <button type="button" class="annotated" id="annotated-btn" aria-label="放大標注圖">
+          <img id="annotated" alt="辨識結果標注圖">
+        </button>
+        <p class="hint">點圖片可放大查看</p>
+      </div>
+
+      <div class="card">
+        <h2>品項數量</h2>
+        <div class="total"><b id="total">0</b><span>箱</span></div>
+        <ul class="rows" id="counts"></ul>
+      </div>
+
+      <div class="card">
+        <h2>每箱明細</h2>
+        <div id="boxes"></div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div class="actions" id="actions" hidden>
+  <!-- capture="environment"：Android / iOS 直接開後鏡頭 -->
+  <label class="btn primary" id="camera-btn" role="button" tabindex="0">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+      <path d="M3 8.5A2.5 2.5 0 0 1 5.5 6h1.6l1.4-2h7l1.4 2h1.6A2.5 2.5 0 0 1 21 8.5v9a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 17.5z"/>
+      <circle cx="12" cy="13" r="3.8"/>
+    </svg>
+    拍照
+    <input type="file" id="camera-input" accept="image/*" capture="environment">
+  </label>
+  <label class="btn" id="gallery-btn" role="button" tabindex="0">
+    相簿
+    <input type="file" id="gallery-input" accept="image/*">
+  </label>
+</div>
+
+<dialog class="viewer" id="viewer" aria-label="標注圖">
+  <div class="viewer-inner"><img id="viewer-img" alt="辨識結果標注圖（放大）"></div>
+  <button type="button" class="viewer-close" id="viewer-close">關閉</button>
+</dialog>
+
+<script>
+(() => {
+  "use strict";
+
+  // 上傳前在手機上縮圖：手機原圖 3~8 MB，縮到長邊 2048 px 可大幅縮短上傳時間，
+  // 也足夠讀出箱子上的品名與日期。重新編碼同時套用 EXIF 方向、去掉 GPS 等中繼資料。
+  const MAX_SIDE = 2048;
+  const JPEG_QUALITY = 0.9;
+
+  const $ = (id) => document.getElementById(id);
+  let busy = false;
+
+  // ── API ──
+  async function api(path, options = {}) {
+    const r = await fetch("/app/api/" + path, { credentials: "same-origin", ...options });
+    let data = null;
+    try { data = await r.json(); } catch {}
+    if (!r.ok) {
+      const err = new Error((data && data.detail) || `伺服器錯誤（${r.status}）`);
+      err.status = r.status;
+      throw err;
+    }
+    return data;
+  }
+
+  function showError(el, msg) { el.textContent = msg; el.hidden = !msg; }
+
+  // ── 畫面切換 ──
+  function showLogin(message) {
+    $("app-view").hidden = true;
+    $("actions").hidden = true;
+    $("who").hidden = true;
+    $("login-view").hidden = false;
+    showError($("login-error"), message || "");
+    $("password").value = "";
+    ($("username").value ? $("password") : $("username")).focus();
+  }
+
+  function showApp(me) {
+    $("login-view").hidden = true;
+    $("who-name").textContent = me.username;
+    $("who").hidden = false;
+    $("app-view").hidden = false;
+    $("actions").hidden = false;
+  }
+
+  // ── 登入 / 登出 ──
+  $("login-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const username = $("username").value.trim();
+    const password = $("password").value;
+    if (!username || !password) { showError($("login-error"), "請輸入帳號和密碼"); return; }
+    $("login-btn").disabled = true;
+    try {
+      const me = await api("login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password }),
+      });
+      showApp(me);
+    } catch (err) {
+      showError($("login-error"), err.message);
+    } finally {
+      $("login-btn").disabled = false;
+    }
+  });
+
+  $("logout").addEventListener("click", async () => {
+    try { await api("logout", { method: "POST" }); } catch {}
+    resetResult();
+    showLogin();
+  });
+
+  // ── 拍照 / 選圖 ──
+  for (const id of ["camera", "gallery"]) {
+    const input = $(id + "-input");
+    const btn = $(id + "-btn");
+    btn.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); input.click(); }
+    });
+    input.addEventListener("change", () => {
+      const file = input.files && input.files[0];
+      input.value = "";               // 同一張再選一次也會觸發 change
+      if (file) detect(file);
+    });
+  }
+
+  async function shrink(file) {
+    let bmp;
+    try {
+      bmp = await createImageBitmap(file, { imageOrientation: "from-image" });
+    } catch {
+      return file;                    // 瀏覽器解不開（例如少見格式）就原檔上傳，交給伺服器判斷
+    }
+    const scale = Math.min(1, MAX_SIDE / Math.max(bmp.width, bmp.height));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(bmp.width * scale);
+    canvas.height = Math.round(bmp.height * scale);
+    canvas.getContext("2d").drawImage(bmp, 0, 0, canvas.width, canvas.height);
+    bmp.close();
+    const blob = await new Promise((res) => canvas.toBlob(res, "image/jpeg", JPEG_QUALITY));
+    return blob || file;
+  }
+
+  function stamp() {
+    const d = new Date(), p = (n) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
+  }
+
+  function setBusy(on) {
+    busy = on;
+    for (const id of ["camera-btn", "gallery-btn"]) $(id).setAttribute("aria-disabled", on ? "true" : "false");
+  }
+
+  let timer = null;
+  let previewUrl = null;
+
+  async function detect(file) {
+    if (busy) return;
+    setBusy(true);
+    showError($("app-error"), "");
+    $("empty").hidden = true;
+    $("result").hidden = true;
+    $("busy").hidden = false;
+    $("busy-text").textContent = "處理照片…";
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    previewUrl = URL.createObjectURL(file);
+    $("busy-img").src = previewUrl;
+
+    const t0 = Date.now();
+    $("busy-time").textContent = "0 秒";
+    timer = setInterval(() => { $("busy-time").textContent = `${Math.floor((Date.now() - t0) / 1000)} 秒`; }, 500);
+
+    try {
+      const blob = await shrink(file);
+      $("busy-text").textContent = "辨識中…";
+      const form = new FormData();
+      form.append("file", blob, `camera_${stamp()}.jpg`);
+      const data = await api("detect", { method: "POST", body: form });
+      renderResult(data);
+    } catch (err) {
+      if (err.status === 401) {
+        resetResult();
+        showLogin(err.message);
+      } else {
+        $("empty").hidden = false;
+        showError($("app-error"), err.status ? err.message : "連線失敗，請確認網路後再試一次");
+      }
+    } finally {
+      clearInterval(timer);
+      $("busy").hidden = true;
+      setBusy(false);
+    }
+  }
+
+  // ── 顯示結果 ──
+  function fmtDate(d) { return d ? `${d.year}-${d.month}-${d.day}` : null; }
+
+  function dateCell(value) {
+    const dd = document.createElement("dd");
+    if (value) dd.textContent = value;
+    else { dd.textContent = "無法辨識"; dd.className = "none"; }
+    return dd;
+  }
+
+  function productNode(brand, name) {
+    const span = document.createElement("span");
+    span.className = "pname";
+    if (brand) {
+      const b = document.createElement("span");
+      b.className = "brand";
+      b.textContent = brand;
+      span.append(b);
+    }
+    span.append(document.createTextNode(name));
+    return span;
+  }
+
+  function renderResult(data) {
+    $("annotated").src = data.annotated_image_base64
+      ? "data:image/jpeg;base64," + data.annotated_image_base64
+      : previewUrl;                   // 沒偵測到任何箱子時伺服器不畫圖，顯示原圖
+    $("viewer-img").src = $("annotated").src;
+    $("total").textContent = data.total_boxes;
+
+    const counts = $("counts");
+    if (!data.product_counts.length) {
+      const li = document.createElement("li");
+      li.className = "none";
+      li.textContent = "沒有偵測到紙箱，請換個角度或靠近一點再拍一次";
+      counts.replaceChildren(li);
+    } else {
+      counts.replaceChildren(...data.product_counts.map((pc) => {
+        const li = document.createElement("li");
+        const c = document.createElement("span");
+        c.className = "count";
+        c.textContent = `${pc.count} 箱`;
+        li.append(productNode(pc.brand, pc.name), c);
+        return li;
+      }));
+    }
+
+    const boxes = $("boxes");
+    if (!data.boxes.length) {
+      const p = document.createElement("p");
+      p.className = "none";
+      p.style.margin = "0";
+      p.textContent = "沒有資料";
+      boxes.replaceChildren(p);
+    } else {
+      boxes.replaceChildren(...data.boxes.map((b) => {
+        const div = document.createElement("div");
+        div.className = "box";
+        const head = document.createElement("div");
+        head.className = "box-head";
+        const id = document.createElement("span");
+        id.className = "box-id";
+        id.textContent = b.box_id;
+        head.append(id, b.product ? productNode(b.product.brand, b.product.name) : productNode(null, "未知品項"));
+        const dl = document.createElement("dl");
+        dl.className = "dates";
+        const dt1 = document.createElement("dt"); dt1.textContent = "有效日期";
+        const dt2 = document.createElement("dt"); dt2.textContent = "製造日期";
+        dl.append(dt1, dateCell(fmtDate(b.expiry_date)), dt2, dateCell(fmtDate(b.manufacture_date)));
+        div.append(head, dl);
+        return div;
+      }));
+    }
+
+    $("result").hidden = false;
+    window.scrollTo({ top: 0 });
+  }
+
+  function resetResult() {
+    $("result").hidden = true;
+    $("busy").hidden = true;
+    $("empty").hidden = false;
+    showError($("app-error"), "");
+  }
+
+  // ── 放大檢視 ──
+  $("annotated-btn").addEventListener("click", () => $("viewer").showModal());
+  $("viewer-close").addEventListener("click", () => $("viewer").close());
+
+  // ── 開啟頁面時確認是否已登入 ──
+  api("me").then(showApp).catch(() => showLogin());
+})();
+</script>
+</body>
+</html>

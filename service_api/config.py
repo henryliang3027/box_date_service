@@ -77,6 +77,16 @@ USAGE_IMAGES_DIR: str = os.getenv("USAGE_IMAGES_DIR", str(ROOT_DIR / "data" / "c
 ADMIN_USER: str = os.getenv("ADMIN_USER", "admin")
 ADMIN_PASSWORD: str = os.getenv("ADMIN_PASSWORD", "")
 
+# ── 手機 Web 版（/app）登入設定 ───────────────────────────────────────────────
+# 現場人員帳號 { 帳號: {customer, password(雜湊)} }（不進 git），用 manage_web_users.py 管理
+WEB_USERS_PATH: str = os.getenv("WEB_USERS_PATH", str(ROOT_DIR / "web_users.json"))
+# 登入 session 資料庫（只存 token 的雜湊），可用環境變數 WEB_SESSIONS_DB_PATH 覆蓋
+WEB_SESSIONS_DB_PATH: str = os.getenv("WEB_SESSIONS_DB_PATH", str(ROOT_DIR / "data" / "web_sessions.db"))
+# 登入後幾小時要重新登入
+WEB_SESSION_HOURS: int = int(os.getenv("WEB_SESSION_HOURS", "12"))
+# cookie 只在 HTTPS 送出；用 http://<區網 IP> 在手機上測試時設成 false，正式環境務必維持 true
+WEB_COOKIE_SECURE: bool = os.getenv("WEB_COOKIE_SECURE", "true").lower() in ("1", "true", "yes")
+
 # ── 除錯設定 ──────────────────────────────────────────────────────────────────
 # True 時，/detect/image 會印出圖片接收時間（hh:mm:ss）、
 # YOLO 偵測耗時、以及 Gemini 推論耗時
