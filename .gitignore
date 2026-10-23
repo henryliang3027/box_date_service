@@ -8,3 +8,5 @@ received_images/
 api_keys.json
 web_users.json
 data/
+results/*
+test_images/*
