@@ -5,7 +5,7 @@ test_gemini_box2d.py — 「原圖 + 每個紙箱的 box_2d 座標」讓 Gemini 
   1. YOLO segmentation（服務的模型與參數）取得每個紙箱的 polygon，算出外接矩形與中心點
   2. 外接矩形轉成 box_2d：[ymin, xmin, ymax, xmax]，正規化到 0-1000 整數（同服務 gemini_client.py）
   3. 原圖 + 「id → box_2d」清單一起傳給 Gemini，請它依 id 回品名與日期
-     （prompt 沿用服務的規則，去掉 box_2d 偵測；回傳的 id 用 enum 限定）
+     （prompt 的日期、品名規則抄自服務，不叫 Gemini 偵測紙箱；回傳的 id 用 enum 限定）
   4. 依 id 對回紙箱，輸出 result.json，並畫出 YOLO 輪廓 + 中心點品名的 result.jpg
 
 使用方式：
@@ -13,6 +13,7 @@ test_gemini_box2d.py — 「原圖 + 每個紙箱的 box_2d 座標」讓 Gemini 
 
 輸出（預設 results/gemini_box2d/<圖片檔名>/）：
     result.json  [{id, box_2d, name, manufacturer_date, expiration_date, center, conf, polygon}]
+    boxes.jpg    原圖 + 傳給 Gemini 的 box_2d 矩形與 id
     result.jpg   原圖 + YOLO 輪廓 + 每個紙箱中心點寫上品名
 """
 
@@ -28,7 +29,7 @@ from google.genai import types
 
 from service_api import config
 from service_api.services.gemini_client import _DATE_SCHEMA
-from test_gemini_contour import PALETTE, _RULES, draw_result, fmt_date, polygon_center, yolo_polygons
+from test_gemini_contour import PALETTE, draw_result, fmt_date, hex_to_bgr, polygon_center, yolo_polygons
 
 PROMPT = """你是專業的商品紙箱文字辨識專家。圖中紙箱的位置已經偵測好，共 {n} 個，
 每個紙箱以 box_2d 表示：[ymin, xmin, ymax, xmax]，正規化到 0-1000 整數，(0,0) 為左上角、(1000,1000) 為右下角。
@@ -38,10 +39,20 @@ PROMPT = """你是專業的商品紙箱文字辨識專家。圖中紙箱的位�
 
 請依 id 逐一分析「每一個」紙箱的資訊，每個紙箱各自獨立為清單中一個物件，並遵循以下規則：
 
-{rules}
+1. 日期：有「有效期/到期/EXP」直接取為 expiration_date。
+   - 【製造日期+保存期限相加】：僅當同一組日期數字「本身」明確標示「製造日期/生產日期」等字樣，且緊鄰印有對應的保存期限（如10個月），兩者為同一組標示搭配時，才將兩者相加算出 expiration_date。
+   - 【無標示的印章/戳印數字】：若箱面某處只是一串戳印/噴印的日期數字（無任何文字前綴，例如僅印「20241226」+批號），即使箱面「其他地方」另外印有一般規格性質的保存期限文字（如「保存期限:3年」，屬於箱體固定印刷規格說明、並非緊鄰該戳印日期的搭配標示），仍應直接將該戳印日期本身視為 expiration_date，不可自行當作製造日期並加上保存期限重新計算；manufacturer_date 維持查無資訊。
+   - 查無日期則 manufacturer_date/expiration_date 填 null。統一格式 YYYY-MM-DD。
 
-4. 紙箱已由上面的 id 與 box_2d 指定：每個 id 都要回傳一筆，不可新增清單以外的 id、不可合併或拆分；
-   依第 3 條應忽略的紙箱（被遮擋大半、只露極小一角）仍要回傳一筆，product_name 填 "未知"、日期填 null，不可從相鄰紙箱推測。
+2. product_name：必須是箱面實際印刷文字的連續子字串，不可改寫/翻譯/增字/調換順序，逐字核對確保與原文一致（含形近字如「菲」非「非」）。
+   - 取「公司/品牌名稱＋商品類別或品名」的組合，長度以完整表達商品類型為原則，不因求簡短而截斷語意（如需保留「紙湯杯」不可只留「環保」）；不加「袋裝」「箱」等未直接相連的字。
+   - 有口味/風味/規格等細分資訊（如「牛肉蔬菜風味」）必須完整包含，不可只取品牌/大類而省略。
+   - 箱面若印有公司/品牌 Logo（如橢圓色塊搭配簡短文字，例：「華元」），即使 Logo 與品名文字位置分開，product_name 仍須以該 Logo 文字為前綴（例：「華元 真魷味 紅燒口味」）；【絕對不可省略】品牌文字是 product_name 的必要組成，不可因加速輸出而簡化省略。
+   - 【書法/藝術字體品牌】：若品牌文字採用書法/毛筆/藝術字體印刷（筆畫較粗、連筆、非標準印刷字形），或紙箱拍攝角度傾斜/旋轉導致文字非水平，仍須耐心逐筆辨識，不可因字體特殊或角度傾斜而略過、猜測形似字、或直接省略；可留意品牌文字旁常伴隨的®/™小圓圈符號來確認該處為品牌標示。
+   - 若印有品名/口味表格：(a) 某欄位有記號（圓點）標示實際內容物，則取「品牌＋該欄品名」（例：MOS BURGER 表格「蕃茄燉雞肉」欄有記號，則為「MOS BURGER 蕃茄燉雞肉」）；(b) 表格字跡模糊無法逐字確認，但有清楚可辨識的共通關鍵字（如各列都以「冰塊」結尾），則取「品牌＋該關鍵字」，模糊到無法確定的修飾字（如「袋裝/鋼製」）絕不可自行猜測，寧可精簡。
+
+3. 紙箱已由上面的 id 與 box_2d 指定：每個 id 都要回傳一筆，不可新增清單以外的 id、不可合併或拆分；
+   若該 id 的紙箱被遮擋、只露出一小部分或字跡模糊，無法從它自己的箱面讀出品名，product_name 填 null，不可從相鄰紙箱推測。
 
 輸出所有 id 紙箱的結構化物件陣列。"""
 
@@ -52,8 +63,30 @@ def to_box_2d(poly: np.ndarray, w: int, h: int) -> list[int]:
     return [round(y / h * 1000), round(x / w * 1000), round((y + bh) / h * 1000), round((x + bw) / w * 1000)]
 
 
+def draw_boxes(img: np.ndarray, boxes: list[list[int]]) -> np.ndarray:
+    """把傳給 Gemini 的 box_2d（0-1000）還原成像素座標，畫出矩形與 id。"""
+    h, w = img.shape[:2]
+    thick = max(2, round(3 * max(w, h) / 1000))
+    scale = max(0.6, w / 1000)
+    out = img.copy()
+    for i, (ymin, xmin, ymax, xmax) in enumerate(boxes):
+        color = hex_to_bgr(PALETTE[i % len(PALETTE)][0])
+        p1 = (round(xmin / 1000 * w), round(ymin / 1000 * h))
+        p2 = (round(xmax / 1000 * w), round(ymax / 1000 * h))
+        cv2.rectangle(out, p1, p2, color, thick)
+        label = f"#{i}"
+        (tw, th), base = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, scale, thick)
+        cv2.rectangle(out, p1, (p1[0] + tw + 6, p1[1] + th + base + 6), color, -1)
+        b, g, r = color
+        text_color = (255, 255, 255) if 0.299 * r + 0.587 * g + 0.114 * b <= 140 else (0, 0, 0)
+        cv2.putText(out, label, (p1[0] + 3, p1[1] + th + 3), cv2.FONT_HERSHEY_SIMPLEX, scale, text_color, thick)
+    return out
+
+
 def ask_gemini(image_jpg: bytes, boxes: list[list[int]]) -> list[dict]:
     box_list = "\n".join(f"- id {i}: {b}" for i, b in enumerate(boxes))
+    prompt = PROMPT.format(n=len(boxes), box_list=box_list)
+    print(f"[PROMPT]\n{prompt}\n")
     schema = {
         "type": "ARRAY",
         "items": {
@@ -61,7 +94,7 @@ def ask_gemini(image_jpg: bytes, boxes: list[list[int]]) -> list[dict]:
             "properties": {
                 # enum 只接受字串，id 以字串回傳再轉回整數
                 "id": {"type": "STRING", "enum": [str(i) for i in range(len(boxes))]},
-                "product_name": {"type": "STRING"},
+                "product_name": {"type": "STRING", "nullable": True},
                 "manufacturer_date": _DATE_SCHEMA,
                 "expiration_date": _DATE_SCHEMA,
             },
@@ -74,7 +107,7 @@ def ask_gemini(image_jpg: bytes, boxes: list[list[int]]) -> list[dict]:
         model=config.GEMINI_MODEL,
         contents=[
             types.Part.from_bytes(data=image_jpg, mime_type="image/jpeg"),
-            PROMPT.format(n=len(boxes), box_list=box_list, rules=_RULES),
+            prompt,
         ],
         config=types.GenerateContentConfig(
             thinking_config=types.ThinkingConfig(thinking_level=types.ThinkingLevel.HIGH),
@@ -108,6 +141,7 @@ def main() -> None:
         raise SystemExit("YOLO 沒有偵測到紙箱")
     boxes = [to_box_2d(p, w, h) for p in polygons]
     print(f"圖片：{image_path}  紙箱：{len(polygons)} 個 → 輸出到 {out_dir}")
+    cv2.imwrite(str(out_dir / "boxes.jpg"), draw_boxes(img, boxes), [cv2.IMWRITE_JPEG_QUALITY, 95])
 
     image_jpg = cv2.imencode(".jpg", img, [cv2.IMWRITE_JPEG_QUALITY, 95])[1].tobytes()
     t0 = time.perf_counter()

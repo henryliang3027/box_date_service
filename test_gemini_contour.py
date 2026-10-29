@@ -16,7 +16,7 @@ test_gemini_contour.py — 「YOLO 輪廓用不同色號標示 + 整張圖送 Ge
     contour.jpg     傳給 Gemini 的輪廓圖
     color_map.json  {色號: {id, color_name, center, conf, polygon}}，center 為 [x, y] 原圖像素座標
     result.json     [{id, color, color_name, name, manufacturer_date, expiration_date, center, conf, polygon}]
-    result.jpg      原圖 + YOLO polygon 輪廓（顏色 = 色號）+ 每個紙箱中心點寫上品名（標籤底色 = 色號），左上角為總數與品項統計
+    result.jpg      原圖 + YOLO polygon 輪廓（顏色 = 色號）+ 每個紙箱中心點寫上品名（標籤底色 = 色號），左上角為總數
 """
 
 import argparse
@@ -26,7 +26,6 @@ from pathlib import Path
 
 import cv2
 import numpy as np
-from collections import Counter
 from google import genai
 from google.genai import types
 from PIL import Image, ImageDraw, ImageFont
@@ -169,7 +168,7 @@ def draw_result(img: np.ndarray, result: list[dict]) -> Image.Image:
         dark_bg = 0.299 * rgb[0] + 0.587 * rgb[1] + 0.114 * rgb[2] <= 140
         text_color, border = ((255, 255, 255), (0, 0, 0)) if dark_bg else ((0, 0, 0), (255, 255, 255))
 
-        label = f"#{r['id']} {r.get('color_name', '')}".rstrip() + f"\n{r['name'] or '（Gemini 未回）'}"
+        label = f"#{r['id']} {r.get('color_name', '')}".rstrip() + f"\n{r['name'] or '未知'}"
         for key, tag in (("manufacturer_date", "製"), ("expiration_date", "效")):
             if r[key]:
                 label += f"\n{tag}: {fmt_date(r[key])}"
@@ -183,9 +182,8 @@ def draw_result(img: np.ndarray, result: list[dict]) -> Image.Image:
         draw.rectangle([x1, y1, x1 + tw, y1 + th], fill=rgb, outline=border, width=2)
         draw.multiline_text((x1 + 4 - l, y1 + 4 - t), label, fill=text_color, font=font)
 
-    # 左上角：總數 + 各品項數量
-    counts = Counter(r["name"] for r in result)
-    summary = "\n".join([f"總數量: {len(result)}"] + [f"{n}: {c}" for n, c in counts.most_common()])
+    # 左上角：總數
+    summary = f"總數量: {len(result)}"
     l, t, rr, b = draw.multiline_textbbox((0, 0), summary, font=font)
     draw.rectangle([0, 0, rr - l + 8, b - t + 8], fill=(0, 0, 0), outline=(255, 255, 255), width=2)
     draw.multiline_text((4 - l, 4 - t), summary, fill=(255, 255, 255), font=font)
